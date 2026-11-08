@@ -3,6 +3,8 @@ package qa.udst.coworkhub.repository;
 
 import qa.udst.coworkhub.entity.BookableResource;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -26,8 +28,15 @@ public interface ResourceRepository
             String name
     );
 
-    // Find resources by capacity
+    // Find resources by minimum capacity
     List<BookableResource> findByCapacityGreaterThanEqual(
             Integer capacity
+    );
+
+    // Check whether a resource has any booking records
+    @Query("SELECT CASE WHEN COUNT(b) > 0 THEN true ELSE false END " +
+           "FROM Booking b WHERE b.resource.id = :resourceId")
+    boolean hasBookingsForResource(
+            @Param("resourceId") Long resourceId
     );
 }

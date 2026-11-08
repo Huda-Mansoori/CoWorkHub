@@ -2,6 +2,8 @@
 package qa.udst.coworkhub.controller;
 
 import qa.udst.coworkhub.entity.BookableResource;
+import qa.udst.coworkhub.entity.MeetingRoom;
+import qa.udst.coworkhub.entity.Desk;
 import qa.udst.coworkhub.entity.ResourceStatus;
 import qa.udst.coworkhub.service.ResourceService;
 
@@ -36,21 +38,38 @@ public class ResourceController {
         return ResponseEntity.ok(resourceService.getResourceById(id));
     }
 
-    // Create a new resource
-    @PostMapping
-    public ResponseEntity<BookableResource> createResource(
-            @RequestBody BookableResource resource) {
+    // Create a meeting room
+    @PostMapping("/rooms")
+    public ResponseEntity<BookableResource> createMeetingRoom(
+            @RequestBody MeetingRoom room) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(resourceService.createResource(resource));
+                .body(resourceService.createResource(room));
     }
 
-    // Update a resource
-    @PutMapping("/{id}")
-    public ResponseEntity<BookableResource> updateResource(
+    // Create a desk
+    @PostMapping("/desks")
+    public ResponseEntity<BookableResource> createDesk(
+            @RequestBody Desk desk) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(resourceService.createResource(desk));
+    }
+
+    // Update a meeting room
+    @PutMapping("/rooms/{id}")
+    public ResponseEntity<BookableResource> updateMeetingRoom(
             @PathVariable Long id,
-            @RequestBody BookableResource resource) {
+            @RequestBody MeetingRoom room) {
         return ResponseEntity.ok(
-                resourceService.updateResource(id, resource));
+                resourceService.updateResource(id, room));
+    }
+
+    // Update a desk
+    @PutMapping("/desks/{id}")
+    public ResponseEntity<BookableResource> updateDesk(
+            @PathVariable Long id,
+            @RequestBody Desk desk) {
+        return ResponseEntity.ok(
+                resourceService.updateResource(id, desk));
     }
 
     // Delete a resource
