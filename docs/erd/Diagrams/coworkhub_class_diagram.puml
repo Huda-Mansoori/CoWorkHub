@@ -1,0 +1,84 @@
+
+@startuml CoWorkHub_Class_Diagram
+
+title CoWorkHub - JPA Class Diagram
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype ortho
+
+abstract class BookableResource {
+    - Long id
+    - String name
+    - String location
+    - Integer capacity
+    - BigDecimal hourlyRate
+    - ResourceStatus status
+}
+
+class MeetingRoom {
+    - Boolean projector
+    - Boolean videoConference
+}
+
+class Desk {
+    - String deskType
+}
+
+class Member {
+    - Long id
+    - String fullName
+    - String email
+}
+
+class Booking {
+    - Long id
+    - LocalDateTime startDateTime
+    - LocalDateTime endDateTime
+    - Integer attendees
+    - BookingStatus status
+    - BigDecimal totalCost
+}
+
+enum ResourceStatus {
+    ACTIVE
+    OUT_OF_SERVICE
+}
+
+enum BookingStatus {
+    CONFIRMED
+    CANCELLED
+}
+
+' JPA inheritance
+MeetingRoom --|> BookableResource
+Desk --|> BookableResource
+
+' Entity relationships
+Member "1" -- "0..*" Booking : bookings
+BookableResource "1" -- "0..*" Booking : bookings
+
+note right of BookableResource
+  @Entity
+  @Inheritance(strategy = JOINED)
+end note
+
+note right of Booking
+  @ManyToOne
+  Member member
+
+  @ManyToOne
+  BookableResource resource
+end note
+
+note bottom of Member
+  @OneToMany(mappedBy = "member")
+  List<Booking> bookings
+end note
+
+note bottom of BookableResource
+  @OneToMany(mappedBy = "resource")
+  List<Booking> bookings
+end note
+
+@enduml

@@ -1,0 +1,110 @@
+
+@startuml CoWorkHub_ERD
+
+title CoWorkHub - Database Entity Relationship Diagram
+
+left to right direction
+hide methods
+skinparam linetype ortho
+skinparam shadowing false
+skinparam nodesep 65
+skinparam ranksep 80
+skinparam defaultFontSize 13
+
+skinparam entity {
+    BackgroundColor White
+    BorderColor #455A64
+    FontColor #263238
+}
+
+skinparam ArrowColor #455A64
+
+' =========================
+' MEMBER ENTITY
+' =========================
+
+entity "MEMBER" as Member {
+    * id : BIGINT <<PK>>
+    --
+    full_name : VARCHAR(150)
+    email : VARCHAR(150) <<UNIQUE>>
+}
+
+' =========================
+' BOOKING ENTITY
+' =========================
+
+entity "BOOKING" as Booking {
+    * id : BIGINT <<PK>>
+    --
+    start_date_time : DATETIME
+    end_date_time : DATETIME
+    attendees : INT
+    status : VARCHAR(30)
+    total_cost : DECIMAL(10,2)
+    --
+    member_id : BIGINT <<FK>>
+    resource_id : BIGINT <<FK>>
+}
+
+' =========================
+' PARENT RESOURCE ENTITY
+' =========================
+
+entity "BOOKABLE_RESOURCE" as Resource {
+    * id : BIGINT <<PK>>
+    --
+    name : VARCHAR(150)
+    location : VARCHAR(150)
+    capacity : INT
+    hourly_rate : DECIMAL(10,2)
+    status : VARCHAR(30)
+}
+
+' =========================
+' CHILD RESOURCE ENTITIES
+' =========================
+
+entity "MEETING_ROOM" as MeetingRoom {
+    * id : BIGINT <<PK, FK>>
+    --
+    projector : BOOLEAN
+    video_conference : BOOLEAN
+}
+
+entity "DESK" as Desk {
+    * id : BIGINT <<PK, FK>>
+    --
+    desk_type : VARCHAR(50)
+}
+
+' =========================
+' ENTITY RELATIONSHIPS
+' =========================
+
+Member ||--o{ Booking : "makes"
+
+Resource ||--o{ Booking : "receives"
+
+' =========================
+' JOINED INHERITANCE
+' =========================
+
+note right of MeetingRoom
+  JOINED inheritance:
+  id is PK and FK
+  referencing BOOKABLE_RESOURCE.id
+end note
+
+note right of Desk
+  JOINED inheritance:
+  id is PK and FK
+  referencing BOOKABLE_RESOURCE.id
+end note
+
+note bottom of Resource
+  Parent entity for:
+  MEETING_ROOM and DESK
+end note
+
+@enduml
