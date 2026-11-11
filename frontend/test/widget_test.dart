@@ -1,30 +1,38 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
 import 'package:frontend/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget( MyApp());
+  testWidgets('Available resource can be booked, cancelled and booked again', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MyApp());
+    Future<void> tap(String label) async {
+      await tester.tap(find.text(label).first);
+      await tester.pumpAndSettle();
+    }
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    await tap('Availability');
+    await tap('Check availability');
+    await tap('Book');
+    await tester.tap(find.byType(DropdownButtonFormField<int>).first);
+    await tester.pumpAndSettle();
+    await tap('Dana Ali');
+    await tap('Save booking');
+    expect(find.text('CONFIRMED'), findsOneWidget);
+    await tap('Availability');
+    await tap('Check availability');
+    expect(find.text('Meeting Room A'), findsNothing);
+    await tap('Bookings');
+    await tester.ensureVisible(find.byTooltip('Cancel booking'));
+    await tester.tap(find.byTooltip('Cancel booking'));
+    await tester.pumpAndSettle();
+    await tap('Cancel booking');
+    expect(find.text('CANCELLED'), findsOneWidget);
+    await tap('Availability');
+    await tap('Check availability');
+    expect(find.text('Meeting Room A'), findsOneWidget);
   });
 }

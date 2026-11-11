@@ -1,6 +1,9 @@
+import '../services/demo_catalog.dart';
 import 'package:flutter/material.dart';
 
 class Members extends StatefulWidget {
+  final DemoCatalog catalog;
+  const Members(this.catalog, {super.key});
   @override
   State<Members> createState() => _MembersState();
 }
@@ -8,7 +11,7 @@ class Members extends StatefulWidget {
 class _MembersState extends State<Members> {
 
   // 1. MEMBER DATA
-  List<Map<String, String>> members = [];
+  List<Map<String, String>> get members => widget.catalog.members;
   String searchText = '';
 
   // 2. SEARCH MEMBERS
@@ -122,7 +125,11 @@ class _MembersState extends State<Members> {
               icon: Icon(Icons.delete),
               tooltip: 'Delete Member',
               onPressed: () {
-                setState(() {
+                if (widget.catalog.bookings.any((b) => b.slot.memberId.toString() == member['id'].toString())) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('This member has booking history and cannot be deleted.')));
+                      return;
+                    }
+                    setState(() {
                   members.remove(member);
                 });
               },
@@ -216,6 +223,7 @@ class _MembersState extends State<Members> {
                 setState(() {
                   if (existing == null) {
                     members.add({
+                      'id': (widget.catalog.nextMemberId++).toString(),
                       'name': newName,
                       'email': newEmail,
                     });

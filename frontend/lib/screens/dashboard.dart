@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'members.dart';
+import 'booking_workspace.dart';
+import '../services/demo_catalog.dart';
 import 'resources.dart';
 
 class Dashboard extends StatefulWidget {
@@ -15,6 +17,7 @@ class _DashboardState extends State<Dashboard> {
 
   // 1. SELECTED MENU
   int selectedIndex = 0;
+  final catalog = DemoCatalog();
 
   // 2. MAIN SCREEN
   @override
@@ -65,6 +68,10 @@ class _DashboardState extends State<Dashboard> {
               ),
 
               NavigationRailDestination(
+                icon: Icon(Icons.add_box_outlined),
+                label: Text('New Booking'),
+              ),
+              NavigationRailDestination(
                 icon: Icon(Icons.book_online),
                 label: Text('Bookings'),
               ),
@@ -73,20 +80,12 @@ class _DashboardState extends State<Dashboard> {
 
           // 2.3 Display selected screen
           Expanded(
-            child: selectedIndex == 1
-                ? Resources()
-                : selectedIndex == 2
-                    ? Members()
-                    : Center(
-                        child: Text(
-                          selectedIndex == 0
-                              ? 'Welcome to CoWorkHub'
-                              : selectedIndex == 3
-                                  ? 'Availability Screen'
-                                  : 'Bookings Screen',
-                          style: TextStyle(fontSize: 24),
-                        ),
-                      ),
+            child: switch (selectedIndex) {
+              0 => const Center(child: Text('Welcome to CoWorkHub', style: TextStyle(fontSize: 24))),
+              1 => Resources(catalog),
+              2 => Members(catalog),
+              _ => BookingWorkspace(page: selectedIndex, catalog: catalog, navigate: (index) => setState(() => selectedIndex = index)),
+            },
           ),
         ],
       ),
