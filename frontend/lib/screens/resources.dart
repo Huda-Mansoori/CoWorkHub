@@ -2,36 +2,59 @@ import 'package:flutter/material.dart';
 
 class Resources extends StatefulWidget {
   @override
-  State<Resources> createState() {
-    return _ResourcesState();
-  }
+  State<Resources> createState() => _ResourcesState();
 }
 
 class _ResourcesState extends State<Resources> {
-  String selectedType = 'All'; // Stores the selected resource type
+  // 1. DATA AND FILTER VALUES
+  List<Map<String, dynamic>> resources = [];
+  String searchText = '';
+  String selectedType = 'All';
+  String selectedCapacity = 'Any';
+  String selectedLocation = 'All Locations';
+  String selectedPrice = 'Any Price';
 
-  String selectedCapacity = 'Any'; // Stores the selected minimum capacity
-  String selectedLocation = 'All Locations'; // Stores the selected location
-  String selectedPrice = 'Any Price'; // Stores the selected price
-  final resourceNameController =
-      TextEditingController(); // reads the resource name entered by the user
-  String newResourceType = 'Meeting Room'; // resource type for new rescource
-  final resourceLocationController = TextEditingController();
-  final resourceCapacityController =
-      TextEditingController(); //reads the capacity entered by controller
-  final resourceRateController =
-      TextEditingController(); // reads hourly rate entered by user
-  String newResourceStatus =
-      'ACTIVE'; // stores the operational status of new resource
+  // 2. SEARCH AND FILTER LOGIC
+  List<Map<String, dynamic>> get visibleResources {
+    return resources.where((resource) {
+      String type = resource.containsKey('projector') ? 'Meeting Room' : 'Desk';
+
+      bool nameMatches = resource['name']
+          .toString()
+          .toLowerCase()
+          .contains(searchText.toLowerCase());
+
+      bool typeMatches = selectedType == 'All' || selectedType == type;
+
+      bool capacityMatches = selectedCapacity == 'Any' ||
+          resource['capacity'] >= int.parse(selectedCapacity);
+
+      bool locationMatches = selectedLocation == 'All Locations' ||
+          resource['location'].toString().toLowerCase() ==
+              selectedLocation.toLowerCase();
+
+      bool priceMatches = selectedPrice == 'Any Price' ||
+          resource['hourlyRate'] <= double.parse(selectedPrice);
+
+      return nameMatches &&
+          typeMatches &&
+          capacityMatches &&
+          locationMatches &&
+          priceMatches;
+    }).toList();
+  }
+
+  // 3. MAIN SCREEN
   @override
   Widget build(BuildContext context) {
+    List<Map<String, dynamic>> shown = visibleResources;
+
     return Padding(
       padding: EdgeInsets.all(20),
-
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. Page title - Resources Management
+          // 3.1 Page title
           Text(
             'Resources Management',
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
@@ -39,8 +62,13 @@ class _ResourcesState extends State<Resources> {
 
           SizedBox(height: 20),
 
-          // 2. Search bar - Search resources by name
+          // 3.2 Search by name
           TextField(
+            onChanged: (value) {
+              setState(() {
+                searchText = value;
+              });
+            },
             decoration: InputDecoration(
               hintText: 'Search resources by name',
               prefixIcon: Icon(Icons.search),
@@ -50,287 +78,423 @@ class _ResourcesState extends State<Resources> {
 
           SizedBox(height: 20),
 
-          // 3. Filter options
-          Row(
+          // 3.3 Filters
+          Wrap(
+            spacing: 20,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              // 3.1 - Filter by resource type - Meeting Room or Desk
-              // Label for resource type
-              Text('Resource Type: '),
-              SizedBox(width: 10),
-              DropdownButton<String>(
-                value: selectedType,
-
-                // Available resource types
-                items: ['All', 'Meeting Room', 'Desk'].map((type) {
-                  return DropdownMenuItem<String>(
-                    value: type,
-                    child: Text(type),
-                  );
-                }).toList(),
-
-                // Runs when the user selects a resource type
-                onChanged: (value) {
-                  setState(() {
-                    selectedType = value!;
-                  });
-                },
+              filterDropdown(
+                'Resource Type',
+                selectedType,
+                ['All', 'Meeting Room', 'Desk'],
+                (value) => setState(() => selectedType = value),
               ),
 
-              // 3.2 - Filter by minimum capacity
-              SizedBox(width: 20),
-              // Label for minimum capacity
-              Text('Minimum Capacity: '),
-              SizedBox(width: 10),
-              DropdownButton<String>(
-                value: selectedCapacity,
-                items: ['Any', '1', '2', '5', '10'].map((capacity) {
-                  return DropdownMenuItem<String>(
-                    value: capacity,
-                    child: Text(capacity),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    selectedCapacity = value!;
-                  });
-                },
+              filterDropdown(
+                'Minimum Capacity',
+                selectedCapacity,
+                ['Any', '1', '2', '5', '10'],
+                (value) => setState(() => selectedCapacity = value),
               ),
 
-              // 3.3 - Filter by location
-              SizedBox(width: 20),
-              Text('Location: '),
-              SizedBox(width: 10),
-              DropdownButton<String>(
-                value: selectedLocation,
-                // availaible locations
-                items: ['All Locations', 'Floor 1', 'Floor 2', 'Floor 3'].map((
-                  location,
-                ) {
-                  return DropdownMenuItem<String>(
-                    value: location,
-                    child: Text(location),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    selectedLocation = value!;
-                  });
-                },
+              filterDropdown(
+                'Location',
+                selectedLocation,
+                ['All Locations', 'Floor 1', 'Floor 2', 'Floor 3'],
+                (value) => setState(() => selectedLocation = value),
               ),
 
-              // 3.4 - Filter by price
-              SizedBox(width: 20),
-              Text('Maximum Price: '),
-              SizedBox(width: 10),
-
-              DropdownButton<String>(
-                value: selectedPrice,
-
-                // available price options
-                items: ['Any Price', '50', '100', '200', '500'].map((price) {
-                  return DropdownMenuItem<String>(
-                    value: price,
-                    child: Text(price),
-                  );
-                }).toList(),
-                //update the selected price
-                onChanged: (value) {
-                  setState(() {
-                    selectedPrice = value!;
-                  });
-                },
+              filterDropdown(
+                'Maximum Price',
+                selectedPrice,
+                ['Any Price', '50', '100', '200', '500'],
+                (value) => setState(() => selectedPrice = value),
               ),
             ],
           ),
 
-          // 4. Add Resource button
           SizedBox(height: 20),
+
+          // 3.4 Add Resource button
           ElevatedButton.icon(
-            onPressed: () {
-              // 4.1 Add Resource form
-              showDialog(
-                context: context,
-                builder: (context) {
-                  return StatefulBuilder(
-                    builder: (context, setDialogState) {
-                      return AlertDialog(
-                        title: Text('Add New Resource'),
-                        content: SingleChildScrollView(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // resource name
-                              TextField(
-                                controller: resourceNameController,
-                                decoration: InputDecoration(
-                                  labelText: 'Resource Name',
-                                  hintText: 'Enter resource name',
-                                  border: OutlineInputBorder(),
-                                ),
-                              ),
-                              SizedBox(height: 20),
-
-                              // recource type
-                              DropdownButtonFormField<String>(
-                                initialValue: newResourceType,
-
-                                //available resource type
-                                items: ['Meeting Room', 'Desk'].map((type) {
-                                  return DropdownMenuItem<String>(
-                                    value: type,
-                                    child: Text(type),
-                                  );
-                                }).toList(),
-
-                                // updates the selected resource type
-                                onChanged: (value) {
-                                  setDialogState(() {
-                                    newResourceType = value!;
-                                  });
-                                },
-                                decoration: InputDecoration(
-                                  labelText: 'Resource Type',
-                                  border: OutlineInputBorder(),
-                                ),
-                              ),
-
-                              SizedBox(height: 20),
-                              // Resource Location
-                              TextField(
-                                controller: resourceLocationController,
-                                decoration: InputDecoration(
-                                  labelText: 'Location',
-                                  hintText: 'Enter Location',
-                                  border: OutlineInputBorder(),
-                                ),
-                              ),
-                              //Enter resource capacity
-                              SizedBox(height: 20),
-
-                              TextField(
-                                controller: resourceCapacityController,
-
-                                decoration: InputDecoration(
-                                  labelText: 'Capacity',
-                                  hintText: 'Enter capacity',
-                                  border: OutlineInputBorder(),
-                                ),
-                              ),
-                              // Hourly rate
-                              SizedBox(height: 20),
-                              TextField(
-                                controller: resourceRateController,
-                                decoration: InputDecoration(
-                                  labelText: 'Hourly Rate (QAR)',
-                                  hintText: 'Entered hourly rate',
-                                  border: OutlineInputBorder(),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        actions: [
-                          //cancel button
-                          TextButton(
-                            onPressed: () {
-                              Navigator.pop(context);
-                            },
-                            child: Text('cancel'),
-                          ),
-                          // Save resource button
-                          ElevatedButton(
-                            onPressed: () {
-                              // Get the resource name entered by the user
-                              String resourceName = resourceNameController.text;
-                              String resourceType = newResourceType;
-                              String resourceLocation =
-                                  resourceLocationController.text;
-                              String resourceCapacity =
-                                  resourceCapacityController.text;
-                              String resourceRate = resourceRateController.text;
-                              String resourceStatus = newResourceStatus;
-                              // chek if resource name empty??
-                              if (resourceName.trim().isEmpty) {
-                                ScaffoldMessenger.of(this.context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Please enter resource name'),
-                                  ),
-                                );
-                                return;
-                              }
-                              // check if location is empty
-                              if (resourceLocation.trim().isEmpty) {
-                                ScaffoldMessenger.of(this.context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Please enter resource location',
-                                    ),
-                                  ),
-                                );
-                                return;
-                              }
-                              // check if capacity = null or less thn equal zero
-                              int? capacity = int.tryParse(resourceCapacity);
-                              if (capacity == null || capacity <= 0) {
-                                ScaffoldMessenger.of(this.context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Please enter valid capacity',
-                                    ),
-                                  ),
-                                );
-                                return;
-                              }
-                              // check if hourly rate is valid number
-                              double? hourlyRate = double.tryParse(
-                                resourceRate,
-                              );
-                              if (hourlyRate == null || hourlyRate <= 0) {
-                                ScaffoldMessenger.of(this.context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Enter valid hourly rate'),
-                                  ),
-                                );
-                                return;
-                              }
-
-                              print(resourceName);
-                              print(resourceType);
-                              print(resourceLocation);
-                              print(resourceCapacity);
-                              print(resourceRate);
-                              print(resourceStatus);
-                            },
-                            child: Text('save'),
-                          ),
-                        ],
-                      ); // Closes AlertDialog
-                    },
-                  ); // Closes StatefulBuilder
-                },
-              ); // Closes showDialog
-            },
+            onPressed: () => openResourceForm(),
             icon: Icon(Icons.add),
             label: Text('Add Resource'),
           ),
 
-          // 5. Resources list with details
+          SizedBox(height: 20),
 
-          // 6. Edit and Delete buttons
+          // 3.5 Available Resources heading
+          Text(
+            'Available Resources',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
 
-          // 7. Success and error messages
+          SizedBox(height: 10),
+
+          // 3.6 Resource cards
+          Expanded(
+            child: shown.isEmpty
+                ? Center(child: Text('No resources available'))
+                : ListView.builder(
+                    itemCount: shown.length,
+                    itemBuilder: (context, index) {
+                      return resourceCard(shown[index]);
+                    },
+                  ),
+          ),
         ],
       ),
     );
   }
 
-  @override
-  void dispose() {
-    resourceNameController.dispose();
-    resourceLocationController.dispose();
-    resourceCapacityController.dispose();
-    resourceRateController.dispose();
+  // 4. FILTER DROPDOWN
+  // Used for Type, Capacity, Location and Price
+  Widget filterDropdown(
+    String label,
+    String selected,
+    List<String> options,
+    void Function(String) onSelect,
+  ) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('$label: '),
 
-    super.dispose();
+        SizedBox(width: 8),
+
+        DropdownButton<String>(
+          value: selected,
+          items: options.map((option) {
+            return DropdownMenuItem(
+              value: option,
+              child: Text(option),
+            );
+          }).toList(),
+          onChanged: (value) {
+            if (value != null) {
+              onSelect(value);
+            }
+          },
+        ),
+      ],
+    );
+  }
+
+  // 5. RESOURCE CARD
+  Widget resourceCard(Map<String, dynamic> resource) {
+    return Card(
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 5.1 Resource details
+            Text(
+              resource['name'],
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            SizedBox(height: 10),
+
+            Text('Location: ${resource['location']}'),
+            Text('Capacity: ${resource['capacity']}'),
+            Text('Hourly Rate: ${resource['hourlyRate']} QAR'),
+            Text('Status: ${resource['status']}'),
+
+            // 5.2 Meeting Room details
+            if (resource.containsKey('projector'))
+              Text('Projector: ${resource['projector'] ? 'Yes' : 'No'}'),
+
+            if (resource.containsKey('videoConference'))
+              Text(
+                'Video Conference: ${resource['videoConference'] ? 'Yes' : 'No'}',
+              ),
+
+            // 5.3 Desk details
+            if (resource.containsKey('deskType'))
+              Text('Desk Type: ${resource['deskType']}'),
+
+            SizedBox(height: 10),
+
+            // 5.4 Edit and Delete buttons
+            Wrap(
+              spacing: 10,
+              children: [
+                // 5.4.1 Edit button
+                ElevatedButton.icon(
+                  onPressed: () {
+                    openResourceForm(existing: resource);
+                  },
+                  icon: Icon(Icons.edit),
+                  label: Text('Edit'),
+                ),
+
+                // 5.4.2 Delete button
+                ElevatedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      resources.remove(resource);
+                    });
+                  },
+                  icon: Icon(Icons.delete),
+                  label: Text('Delete'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 6. ADD AND EDIT RESOURCE FORM
+  // Same form is used for adding and editing
+  Future<void> openResourceForm({Map<String, dynamic>? existing}) async {
+    // 6.1 Get existing values (empty when adding)
+    bool editing = existing != null;
+
+    TextEditingController name =
+        TextEditingController(text: existing?['name'] ?? '');
+
+    TextEditingController location =
+        TextEditingController(text: existing?['location'] ?? '');
+
+    TextEditingController capacity = TextEditingController(
+      text: existing?['capacity']?.toString() ?? '',
+    );
+
+    TextEditingController rate = TextEditingController(
+      text: existing?['hourlyRate']?.toString() ?? '',
+    );
+
+    // 6.2 Resource type and extra options
+    String type = editing && existing.containsKey('deskType')
+        ? 'Desk'
+        : 'Meeting Room';
+
+    bool projector = existing?['projector'] ?? false;
+    bool videoConference = existing?['videoConference'] ?? false;
+    String deskType = existing?['deskType'] ?? 'Regular Desk';
+
+    // 6.3 Open Add/Edit popup
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, updateDialog) {
+            return AlertDialog(
+              title: Text(
+                editing ? 'Edit Resource' : 'Add New Resource',
+              ),
+
+              content: SingleChildScrollView(
+                child: SizedBox(
+                  width: 360,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // 6.4 Resource name
+                      inputField('Resource Name', name),
+
+                      SizedBox(height: 15),
+
+                      // 6.5 Resource type
+                      DropdownButtonFormField<String>(
+                        initialValue: type,
+                        decoration: InputDecoration(
+                          labelText: 'Resource Type',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: ['Meeting Room', 'Desk'].map((value) {
+                          return DropdownMenuItem(
+                            value: value,
+                            child: Text(value),
+                          );
+                        }).toList(),
+                        onChanged: editing
+                            ? null
+                            : (value) {
+                                if (value != null) {
+                                  updateDialog(() {
+                                    type = value;
+                                  });
+                                }
+                              },
+                      ),
+
+                      SizedBox(height: 15),
+
+                      // 6.6 Location
+                      inputField('Location', location),
+
+                      SizedBox(height: 15),
+
+                      // 6.7 Capacity
+                      inputField('Capacity', capacity, numeric: true),
+
+                      SizedBox(height: 15),
+
+                      // 6.8 Hourly rate
+                      inputField('Hourly Rate (QAR)', rate, numeric: true),
+
+                      SizedBox(height: 10),
+
+                      // 6.9 Meeting Room options
+                      if (type == 'Meeting Room') ...[
+                        // 6.9.1 Projector
+                        CheckboxListTile(
+                          title: Text('Projector'),
+                          value: projector,
+                          onChanged: (value) {
+                            updateDialog(() {
+                              projector = value ?? false;
+                            });
+                          },
+                        ),
+
+                        // 6.9.2 Video Conference
+                        CheckboxListTile(
+                          title: Text('Video Conference'),
+                          value: videoConference,
+                          onChanged: (value) {
+                            updateDialog(() {
+                              videoConference = value ?? false;
+                            });
+                          },
+                        ),
+                      ],
+
+                      // 6.10 Desk options
+                      if (type == 'Desk')
+                        DropdownButtonFormField<String>(
+                          initialValue: deskType,
+                          decoration: InputDecoration(
+                            labelText: 'Desk Type',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: [
+                            'Regular Desk',
+                            'Standing Desk',
+                            'Private Desk',
+                          ].map((value) {
+                            return DropdownMenuItem(
+                              value: value,
+                              child: Text(value),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              updateDialog(() {
+                                deskType = value;
+                              });
+                            }
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+
+              actions: [
+                // 6.11 Cancel button
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                  },
+                  child: Text('Cancel'),
+                ),
+
+                // 6.12 Save button
+                ElevatedButton(
+                  onPressed: () {
+                    // 6.12.1 Read entered values
+                    String newName = name.text.trim();
+                    String newLocation = location.text.trim();
+                    int? newCapacity = int.tryParse(capacity.text);
+                    double? newRate = double.tryParse(rate.text);
+
+                    // 6.12.2 Check entered values
+                    if (newName.isEmpty ||
+                        newLocation.isEmpty ||
+                        newCapacity == null ||
+                        newCapacity <= 0 ||
+                        newRate == null ||
+                        newRate <= 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Please enter valid information'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    // 6.12.3 Prepare resource data
+                    Map<String, dynamic> data = {
+                      'name': newName,
+                      'location': newLocation,
+                      'capacity': newCapacity,
+                      'hourlyRate': newRate,
+                      'status': existing?['status'] ?? 'ACTIVE',
+                    };
+
+                    // 6.12.4 Meeting Room data
+                    if (type == 'Meeting Room') {
+                      data['projector'] = projector;
+                      data['videoConference'] = videoConference;
+                    }
+
+                    // 6.12.5 Desk data
+                    else {
+                      data['deskType'] = deskType;
+                    }
+
+                    // 6.12.6 Add or update resource
+                    setState(() {
+                      if (editing) {
+                        existing.clear();
+                        existing.addAll(data);
+                      } else {
+                        resources.add(data);
+                      }
+                    });
+
+                    Navigator.pop(dialogContext);
+                  },
+                  child: Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    // 6.13 Clean up controllers
+    name.dispose();
+    location.dispose();
+    capacity.dispose();
+    rate.dispose();
+  }
+
+  // 7. REUSABLE TEXT FIELD
+  // Used in both Add and Edit forms
+  Widget inputField(
+    String label,
+    TextEditingController controller, {
+    bool numeric = false,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: numeric ? TextInputType.number : TextInputType.text,
+      decoration: InputDecoration(
+        labelText: label,
+        border: OutlineInputBorder(),
+      ),
+    );
   }
 }
