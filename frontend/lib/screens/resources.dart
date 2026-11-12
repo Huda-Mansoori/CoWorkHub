@@ -1,13 +1,16 @@
+import '../services/demo_catalog.dart';
 import 'package:flutter/material.dart';
 
 class Resources extends StatefulWidget {
+  final DemoCatalog catalog;
+  const Resources(this.catalog, {super.key});
   @override
   State<Resources> createState() => _ResourcesState();
 }
 
 class _ResourcesState extends State<Resources> {
   // 1. DATA AND FILTER VALUES
-  List<Map<String, dynamic>> resources = [];
+  List<Map<String, dynamic>> get resources => widget.catalog.resources;
   String searchText = '';
   String selectedType = 'All';
   String selectedCapacity = 'Any';
@@ -237,6 +240,10 @@ class _ResourcesState extends State<Resources> {
                 // 5.4.2 Delete button
                 ElevatedButton.icon(
                   onPressed: () {
+                    if (widget.catalog.bookings.any((b) => b.slot.resourceId.toString() == resource['id'].toString())) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('This resource has booking history and cannot be deleted.')));
+                      return;
+                    }
                     setState(() {
                       resources.remove(resource);
                     });
@@ -435,6 +442,7 @@ class _ResourcesState extends State<Resources> {
 
                     // 6.12.3 Prepare resource data
                     Map<String, dynamic> data = {
+                      'id': existing?['id'] ?? widget.catalog.nextResourceId++,
                       'name': newName,
                       'location': newLocation,
                       'capacity': newCapacity,
