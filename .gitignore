@@ -1,3 +1,8 @@
 backend/src/main/resources/application.properties
 .vscode/
 backend/target/
+
+# Docker environment files
+.env
+.env.*
+!.env.example
