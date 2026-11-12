@@ -1,26 +1,71 @@
-import '../services/demo_catalog.dart';
 import 'package:flutter/material.dart';
+import '../services/demo_catalog.dart';
+import '../services/resource_api.dart';
 
 class Resources extends StatefulWidget {
   final DemoCatalog catalog;
+
   const Resources(this.catalog, {super.key});
+
   @override
   State<Resources> createState() => _ResourcesState();
 }
 
 class _ResourcesState extends State<Resources> {
   // 1. DATA AND FILTER VALUES
-  List<Map<String, dynamic>> get resources => widget.catalog.resources;
+  final ResourceApi resourceApi = ResourceApi();
+
+  List<Map<String, dynamic>> resources = [];
+
+  bool isLoading = true;
+  String? errorMessage;
+
   String searchText = '';
   String selectedType = 'All';
   String selectedCapacity = 'Any';
   String selectedLocation = 'All Locations';
   String selectedPrice = 'Any Price';
 
-  // 2. SEARCH AND FILTER LOGIC
+  // 2. LOAD RESOURCES FROM BACKEND
+  @override
+  void initState() {
+    super.initState();
+    loadResources();
+  }
+
+  Future<void> loadResources() async {
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+
+    try {
+      final data = await resourceApi.getResources();
+
+      if (!mounted) return;
+
+      setState(() {
+        resources = data.map((item) {
+          return Map<String, dynamic>.from(item);
+        }).toList();
+
+        isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        errorMessage = e.toString();
+        isLoading = false;
+      });
+    }
+  }
+
+  // 3. SEARCH AND FILTER LOGIC
   List<Map<String, dynamic>> get visibleResources {
     return resources.where((resource) {
-      String type = resource.containsKey('projector') ? 'Meeting Room' : 'Desk';
+      String type =
+          resource.containsKey('projector') ? 'Meeting Room' : 'Desk';
 
       bool nameMatches = resource['name']
           .toString()
@@ -30,14 +75,16 @@ class _ResourcesState extends State<Resources> {
       bool typeMatches = selectedType == 'All' || selectedType == type;
 
       bool capacityMatches = selectedCapacity == 'Any' ||
-          resource['capacity'] >= int.parse(selectedCapacity);
+          (resource['capacity'] as num).toInt() >=
+              int.parse(selectedCapacity);
 
       bool locationMatches = selectedLocation == 'All Locations' ||
           resource['location'].toString().toLowerCase() ==
               selectedLocation.toLowerCase();
 
       bool priceMatches = selectedPrice == 'Any Price' ||
-          resource['hourlyRate'] <= double.parse(selectedPrice);
+          (resource['hourlyRate'] as num).toDouble() <=
+              double.parse(selectedPrice);
 
       return nameMatches &&
           typeMatches &&
@@ -47,7 +94,7 @@ class _ResourcesState extends State<Resources> {
     }).toList();
   }
 
-  // 3. MAIN SCREEN
+  // 4. MAIN SCREEN
   @override
   Widget build(BuildContext context) {
     List<Map<String, dynamic>> shown = visibleResources;
@@ -57,7 +104,7 @@ class _ResourcesState extends State<Resources> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 3.1 Page title
+          // 4.1 Page title
           Text(
             'Resources Management',
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
@@ -65,7 +112,7 @@ class _ResourcesState extends State<Resources> {
 
           SizedBox(height: 20),
 
-          // 3.2 Search by name
+          // 4.2 Search by name
           TextField(
             onChanged: (value) {
               setState(() {
@@ -81,7 +128,7 @@ class _ResourcesState extends State<Resources> {
 
           SizedBox(height: 20),
 
-          // 3.3 Filters
+          // 4.3 Filters
           Wrap(
             spacing: 20,
             runSpacing: 10,
@@ -119,7 +166,7 @@ class _ResourcesState extends State<Resources> {
 
           SizedBox(height: 20),
 
-          // 3.4 Add Resource button
+          // 4.4 Add Resource button
           ElevatedButton.icon(
             onPressed: () => openResourceForm(),
             icon: Icon(Icons.add),
@@ -128,7 +175,7 @@ class _ResourcesState extends State<Resources> {
 
           SizedBox(height: 20),
 
-          // 3.5 Available Resources heading
+          // 4.5 Available Resources heading
           Text(
             'Available Resources',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -136,24 +183,40 @@ class _ResourcesState extends State<Resources> {
 
           SizedBox(height: 10),
 
-          // 3.6 Resource cards
+          // 4.6 Resource cards
           Expanded(
-            child: shown.isEmpty
-                ? Center(child: Text('No resources available'))
-                : ListView.builder(
-                    itemCount: shown.length,
-                    itemBuilder: (context, index) {
-                      return resourceCard(shown[index]);
-                    },
-                  ),
+            child: isLoading
+                ? Center(child: CircularProgressIndicator())
+                : errorMessage != null
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Could not load resources'),
+                            SizedBox(height: 10),
+                            Text(errorMessage!),
+                            ElevatedButton(
+                              onPressed: loadResources,
+                              child: Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : shown.isEmpty
+                        ? Center(child: Text('No resources available'))
+                        : ListView.builder(
+                            itemCount: shown.length,
+                            itemBuilder: (context, index) {
+                              return resourceCard(shown[index]);
+                            },
+                          ),
           ),
         ],
       ),
     );
   }
 
-  // 4. FILTER DROPDOWN
-  // Used for Type, Capacity, Location and Price
+  // 5. FILTER DROPDOWN
   Widget filterDropdown(
     String label,
     String selected,
@@ -185,7 +248,7 @@ class _ResourcesState extends State<Resources> {
     );
   }
 
-  // 5. RESOURCE CARD
+  // 6. RESOURCE CARD
   Widget resourceCard(Map<String, dynamic> resource) {
     return Card(
       child: Padding(
@@ -193,9 +256,9 @@ class _ResourcesState extends State<Resources> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 5.1 Resource details
+            // 6.1 Resource details
             Text(
-              resource['name'],
+              resource['name'].toString(),
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -209,26 +272,27 @@ class _ResourcesState extends State<Resources> {
             Text('Hourly Rate: ${resource['hourlyRate']} QAR'),
             Text('Status: ${resource['status']}'),
 
-            // 5.2 Meeting Room details
+            // 6.2 Meeting Room details
             if (resource.containsKey('projector'))
-              Text('Projector: ${resource['projector'] ? 'Yes' : 'No'}'),
+              Text(
+                'Projector: ${resource['projector'] == true ? 'Yes' : 'No'}',
+              ),
 
             if (resource.containsKey('videoConference'))
               Text(
-                'Video Conference: ${resource['videoConference'] ? 'Yes' : 'No'}',
+                'Video Conference: ${resource['videoConference'] == true ? 'Yes' : 'No'}',
               ),
 
-            // 5.3 Desk details
+            // 6.3 Desk details
             if (resource.containsKey('deskType'))
               Text('Desk Type: ${resource['deskType']}'),
 
             SizedBox(height: 10),
 
-            // 5.4 Edit and Delete buttons
+            // 6.4 Edit and Delete buttons
             Wrap(
               spacing: 10,
               children: [
-                // 5.4.1 Edit button
                 ElevatedButton.icon(
                   onPressed: () {
                     openResourceForm(existing: resource);
@@ -237,16 +301,9 @@ class _ResourcesState extends State<Resources> {
                   label: Text('Edit'),
                 ),
 
-                // 5.4.2 Delete button
                 ElevatedButton.icon(
                   onPressed: () {
-                    if (widget.catalog.bookings.any((b) => b.slot.resourceId.toString() == resource['id'].toString())) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('This resource has booking history and cannot be deleted.')));
-                      return;
-                    }
-                    setState(() {
-                      resources.remove(resource);
-                    });
+                    deleteResource(resource);
                   },
                   icon: Icon(Icons.delete),
                   label: Text('Delete'),
@@ -259,17 +316,63 @@ class _ResourcesState extends State<Resources> {
     );
   }
 
-  // 6. ADD AND EDIT RESOURCE FORM
-  // Same form is used for adding and editing
-  Future<void> openResourceForm({Map<String, dynamic>? existing}) async {
-    // 6.1 Get existing values (empty when adding)
+  // 7. DELETE RESOURCE
+  Future<void> deleteResource(Map<String, dynamic> resource) async {
+    // 7.1 Check local booking history
+    bool hasBooking = widget.catalog.bookings.any(
+      (b) => b.slot.resourceId.toString() ==
+          resource['id'].toString(),
+    );
+
+    if (hasBooking) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'This resource has booking history and cannot be deleted.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    // 7.2 Delete from backend
+    try {
+      await resourceApi.deleteResource(
+        (resource['id'] as num).toInt(),
+      );
+
+      if (!mounted) return;
+
+      await loadResources();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Resource deleted successfully')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not delete resource: $e')),
+      );
+    }
+  }
+
+  // 8. ADD AND EDIT RESOURCE FORM
+  Future<void> openResourceForm({
+    Map<String, dynamic>? existing,
+  }) async {
+    // 8.1 Get existing values
     bool editing = existing != null;
 
-    TextEditingController name =
-        TextEditingController(text: existing?['name'] ?? '');
+    TextEditingController name = TextEditingController(
+      text: existing?['name'] ?? '',
+    );
 
-    TextEditingController location =
-        TextEditingController(text: existing?['location'] ?? '');
+    TextEditingController location = TextEditingController(
+      text: existing?['location'] ?? '',
+    );
 
     TextEditingController capacity = TextEditingController(
       text: existing?['capacity']?.toString() ?? '',
@@ -279,7 +382,7 @@ class _ResourcesState extends State<Resources> {
       text: existing?['hourlyRate']?.toString() ?? '',
     );
 
-    // 6.2 Resource type and extra options
+    // 8.2 Resource type and extra options
     String type = editing && existing.containsKey('deskType')
         ? 'Desk'
         : 'Meeting Room';
@@ -288,7 +391,7 @@ class _ResourcesState extends State<Resources> {
     bool videoConference = existing?['videoConference'] ?? false;
     String deskType = existing?['deskType'] ?? 'Regular Desk';
 
-    // 6.3 Open Add/Edit popup
+    // 8.3 Open Add/Edit popup
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
@@ -305,12 +408,12 @@ class _ResourcesState extends State<Resources> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // 6.4 Resource name
+                      // 8.4 Resource name
                       inputField('Resource Name', name),
 
                       SizedBox(height: 15),
 
-                      // 6.5 Resource type
+                      // 8.5 Resource type
                       DropdownButtonFormField<String>(
                         initialValue: type,
                         decoration: InputDecoration(
@@ -336,24 +439,31 @@ class _ResourcesState extends State<Resources> {
 
                       SizedBox(height: 15),
 
-                      // 6.6 Location
+                      // 8.6 Location
                       inputField('Location', location),
 
                       SizedBox(height: 15),
 
-                      // 6.7 Capacity
-                      inputField('Capacity', capacity, numeric: true),
+                      // 8.7 Capacity
+                      inputField(
+                        'Capacity',
+                        capacity,
+                        numeric: true,
+                      ),
 
                       SizedBox(height: 15),
 
-                      // 6.8 Hourly rate
-                      inputField('Hourly Rate (QAR)', rate, numeric: true),
+                      // 8.8 Hourly rate
+                      inputField(
+                        'Hourly Rate (QAR)',
+                        rate,
+                        numeric: true,
+                      ),
 
                       SizedBox(height: 10),
 
-                      // 6.9 Meeting Room options
+                      // 8.9 Meeting Room options
                       if (type == 'Meeting Room') ...[
-                        // 6.9.1 Projector
                         CheckboxListTile(
                           title: Text('Projector'),
                           value: projector,
@@ -364,7 +474,6 @@ class _ResourcesState extends State<Resources> {
                           },
                         ),
 
-                        // 6.9.2 Video Conference
                         CheckboxListTile(
                           title: Text('Video Conference'),
                           value: videoConference,
@@ -376,7 +485,7 @@ class _ResourcesState extends State<Resources> {
                         ),
                       ],
 
-                      // 6.10 Desk options
+                      // 8.10 Desk options
                       if (type == 'Desk')
                         DropdownButtonFormField<String>(
                           initialValue: deskType,
@@ -408,7 +517,7 @@ class _ResourcesState extends State<Resources> {
               ),
 
               actions: [
-                // 6.11 Cancel button
+                // 8.11 Cancel button
                 TextButton(
                   onPressed: () {
                     Navigator.pop(dialogContext);
@@ -416,16 +525,16 @@ class _ResourcesState extends State<Resources> {
                   child: Text('Cancel'),
                 ),
 
-                // 6.12 Save button
+                // 8.12 Save button
                 ElevatedButton(
-                  onPressed: () {
-                    // 6.12.1 Read entered values
+                  onPressed: () async {
+                    // 8.12.1 Read entered values
                     String newName = name.text.trim();
                     String newLocation = location.text.trim();
                     int? newCapacity = int.tryParse(capacity.text);
                     double? newRate = double.tryParse(rate.text);
 
-                    // 6.12.2 Check entered values
+                    // 8.12.2 Check entered values
                     if (newName.isEmpty ||
                         newLocation.isEmpty ||
                         newCapacity == null ||
@@ -440,9 +549,8 @@ class _ResourcesState extends State<Resources> {
                       return;
                     }
 
-                    // 6.12.3 Prepare resource data
+                    // 8.12.3 Prepare resource data
                     Map<String, dynamic> data = {
-                      'id': existing?['id'] ?? widget.catalog.nextResourceId++,
                       'name': newName,
                       'location': newLocation,
                       'capacity': newCapacity,
@@ -450,28 +558,57 @@ class _ResourcesState extends State<Resources> {
                       'status': existing?['status'] ?? 'ACTIVE',
                     };
 
-                    // 6.12.4 Meeting Room data
                     if (type == 'Meeting Room') {
                       data['projector'] = projector;
                       data['videoConference'] = videoConference;
-                    }
-
-                    // 6.12.5 Desk data
-                    else {
+                    } else {
                       data['deskType'] = deskType;
                     }
 
-                    // 6.12.6 Add or update resource
-                    setState(() {
+                    // 8.12.4 Save to backend
+                    try {
                       if (editing) {
-                        existing.clear();
-                        existing.addAll(data);
-                      } else {
-                        resources.add(data);
-                      }
-                    });
+                        int id = (existing['id'] as num).toInt();
 
-                    Navigator.pop(dialogContext);
+                        if (type == 'Meeting Room') {
+                          await resourceApi.updateMeetingRoom(id, data);
+                        } else {
+                          await resourceApi.updateDesk(id, data);
+                        }
+                      } else {
+                        if (type == 'Meeting Room') {
+                          await resourceApi.addMeetingRoom(data);
+                        } else {
+                          await resourceApi.addDesk(data);
+                        }
+                      }
+
+                      if (!mounted || !dialogContext.mounted) return;
+
+                      Navigator.pop(dialogContext);
+
+                      await loadResources();
+
+                      if (!mounted) return;
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            editing
+                                ? 'Resource updated successfully'
+                                : 'Resource added successfully',
+                          ),
+                        ),
+                      );
+                    } catch (e) {
+                      if (!mounted) return;
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Could not save resource: $e'),
+                        ),
+                      );
+                    }
                   },
                   child: Text('Save'),
                 ),
@@ -482,15 +619,14 @@ class _ResourcesState extends State<Resources> {
       },
     );
 
-    // 6.13 Clean up controllers
+    // 8.13 Clean up controllers
     name.dispose();
     location.dispose();
     capacity.dispose();
     rate.dispose();
   }
 
-  // 7. REUSABLE TEXT FIELD
-  // Used in both Add and Edit forms
+  // 9. REUSABLE TEXT FIELD
   Widget inputField(
     String label,
     TextEditingController controller, {
@@ -498,7 +634,8 @@ class _ResourcesState extends State<Resources> {
   }) {
     return TextField(
       controller: controller,
-      keyboardType: numeric ? TextInputType.number : TextInputType.text,
+      keyboardType:
+          numeric ? TextInputType.number : TextInputType.text,
       decoration: InputDecoration(
         labelText: label,
         border: OutlineInputBorder(),
