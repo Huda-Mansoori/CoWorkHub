@@ -1,15 +1,15 @@
 package qa.udst.coworkhub.controller;
 
-import lombok.Getter;
-import lombok.Setter;
+import java.time.LocalDateTime;
+import lombok.Data;
 
-@Getter
-@Setter 
+@Data
 public class BookingRequest {
-    private Long resourceId;
+
     private Long memberId;
-    private String startDateTime;
-    private String endDateTime;
+    private Long resourceId;
+    private LocalDateTime startDateTime;
+    private LocalDateTime endDateTime;
     private Integer attendees;
-    private String status; // when cancelling
+    private String status;  // only used when cancelling
 }
