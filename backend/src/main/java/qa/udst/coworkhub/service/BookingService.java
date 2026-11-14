@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -59,6 +60,10 @@ public class BookingService {
         booking.setTotalCost(calculateCost(resource, request.getStartDateTime(), request.getEndDateTime()));
 
         return bookingRepository.save(booking);
+    }
+
+    public List<Booking> getAllBookings() {
+        return bookingRepository.findAll();
     }
 
     private void checkRules(BookableResource resource, BookingRequest request, Long bookingId) {
@@ -124,7 +129,7 @@ public class BookingService {
                     "This resource is out of service and cannot be booked."
             );
         }
-    }   // <-- this closing brace was missing
+    }
 
     private BigDecimal calculateCost(BookableResource resource, LocalDateTime startTime, LocalDateTime endTime) {
         long minutes = Duration.between(startTime, endTime).toMinutes();
