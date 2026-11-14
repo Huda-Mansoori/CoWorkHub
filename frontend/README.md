@@ -18,21 +18,28 @@ samples, guidance on mobile development, and a full API reference.
 
 ## Booking workflow
 
-From this directory run `flutter run -d chrome` or, on Windows, `flutter run -d windows`.
-The default demo shares members and resources with the management screens. Start in
-Availability, choose the time and group size, check availability, and select Book.
-Bookings shows confirmed and cancelled reservations and lets you edit or cancel them.
-Demo changes last until you restart or reload the app.
+Run `flutter run -d chrome` or `flutter run -d windows` from this directory.
+All screens now target `http://localhost:8080/api` by default.
+Start the backend and database using the root README instructions.
 
-To use the booking backend, run
-`flutter run -d chrome --dart-define=COWORK_API_BASE=http://localhost:8080/api`.
-The booking screens load members, resources and bookings from that base URL.
-The management screens still use session data. The booking and availability
-controllers are pending on the team's backend branch. The proposed contract is:
+The Members and Resources screens include Member 3's latest HTTP integration.
+Booking screens load members, resources and bookings from the API, and support
+availability search, create, update and cancellation. Booking and availability
+controllers are still pending in the remote backend branches checked on November 14,
+2026. Until those exist, the booking screens show the API error and a Retry button.
+
+The booking HTTP contract follows the project brief:
 
 - GET `/bookings`, `/members` and `/resources` return JSON arrays.
 - GET `/resources/available` accepts `startDateTime` and `endDateTime`.
 - POST `/bookings` and PUT `/bookings/{id}` accept memberId, resourceId,
   startDateTime, endDateTime and attendees. Cancellation also sends status CANCELLED.
-- The server assigns status and totalCost and validates availability. The client
-  displays server errors and reloads the lists after successful changes.
+- The server assigns status and totalCost and validates availability.
+
+Override the booking API base with
+`--dart-define=COWORK_API_BASE=http://localhost:8080/api`.
+For an offline booking demo, explicitly pass `--dart-define=COWORK_API_BASE=`.
+Demo data is temporary. The Members and Resources management screens use the API.
+
+Run the offline booking tests with
+`flutter test --dart-define=COWORK_API_BASE=`.

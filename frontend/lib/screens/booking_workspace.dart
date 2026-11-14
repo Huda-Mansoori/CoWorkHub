@@ -20,7 +20,10 @@ class BookingWorkspace extends StatefulWidget {
 }
 
 class _BookingWorkspaceState extends State<BookingWorkspace> {
-  static const base = String.fromEnvironment('COWORK_API_BASE');
+  static const base = String.fromEnvironment(
+    'COWORK_API_BASE',
+    defaultValue: 'http://localhost:8080/api',
+  );
   final client = http.Client();
   late final api = BookingApi(base, client);
   final count = TextEditingController(text: '1');
