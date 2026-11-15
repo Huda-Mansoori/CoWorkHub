@@ -75,7 +75,11 @@ class _BookingWorkspaceState extends State<BookingWorkspace> {
     try {
       await action();
     } catch (e) {
-      if (mounted) error = e.toString().replaceFirst('Exception: ', '');
+      if (mounted) {
+        error = e is FormatException
+            ? e.message
+            : e.toString().replaceFirst('Exception: ', '');
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -153,9 +157,17 @@ class _BookingWorkspaceState extends State<BookingWorkspace> {
     if (memberId == null || r == null) {
       throw const FormatException('Select a member and a resource.');
     }
-    if (r.status != 'ACTIVE' || n > r.capacity) {
+    if (r.status != 'ACTIVE') {
       throw const FormatException(
-        'Select an active resource with enough capacity.',
+        'This resource is out of service and cannot be booked.',
+      );
+    }
+    if (r.isDesk && n != 1) {
+      throw const FormatException('A desk can only accommodate 1 attendee.');
+    }
+    if (n > r.capacity) {
+      throw FormatException(
+        'Attendees exceed the room capacity of ${r.capacity}.',
       );
     }
     final slot = Reservation(memberId!, r.id, n, start, end);
@@ -252,7 +264,9 @@ class _BookingWorkspaceState extends State<BookingWorkspace> {
       items: options.entries
           .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
           .toList(),
-      onChanged: (v) => setState(() => change(v)),
+      onChanged: label == 'Member' && editing != null
+          ? null
+          : (v) => setState(() => change(v)),
     );
   }
 

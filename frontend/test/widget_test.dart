@@ -35,4 +35,33 @@ void main() {
     await tap('Check availability');
     expect(find.text('Meeting Room A'), findsOneWidget);
   });
+  testWidgets('Validation shows plain messages and explains desk capacity', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const MyApp());
+    await tester.tap(find.text('New Booking'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save booking'));
+    await tester.pumpAndSettle();
+    expect(find.text('Select a member and a resource.'), findsOneWidget);
+    expect(find.textContaining('Format'), findsNothing);
+    await tester.tap(find.byType(DropdownButtonFormField<int>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dana Ali').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<int>).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Desk 1').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '3');
+    await tester.tap(find.text('Save booking'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('A desk can only accommodate 1 attendee.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Format'), findsNothing);
+  });
 }

@@ -53,10 +53,7 @@ class BookingApi {
   Future<List<Resource>> available(DateTime start, DateTime end) => list(
     'resources/available',
     Resource.fromJson,
-    query: {
-      'startDateTime': start.toIso8601String(),
-      'endDateTime': end.toIso8601String(),
-    },
+    query: {'start': start.toIso8601String(), 'end': end.toIso8601String()},
   );
   Future<void> save(Reservation slot, {int? id, bool cancel = false}) async {
     await request(

@@ -38,4 +38,18 @@ void main() {
       ),
     );
   });
+  test('Availability uses backend start and end parameter names', () async {
+    final api = BookingApi(
+      'http://localhost/api',
+      MockClient((request) async {
+        expect(request.url.path, '/api/resources/available');
+        expect(request.url.queryParameters, {
+          'start': start.toIso8601String(),
+          'end': end.toIso8601String(),
+        });
+        return http.Response('[]', 200);
+      }),
+    );
+    expect(await api.available(start, end), isEmpty);
+  });
 }

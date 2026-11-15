@@ -5,8 +5,10 @@ class Resource {
   final String name, location, status;
   final int capacity;
   final double rate;
+  final bool isDesk;
   Resource.fromJson(Json j)
-    : id = j['id'],
+    : isDesk = j['deskType'] != null,
+      id = j['id'],
       name = j['name'],
       location = j['location'],
       status = j['status'],
