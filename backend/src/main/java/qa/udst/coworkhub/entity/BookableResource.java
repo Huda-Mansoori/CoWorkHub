@@ -5,6 +5,8 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 @Entity
 @Inheritance(strategy = InheritanceType.JOINED)
 public abstract class BookableResource {
@@ -29,6 +31,7 @@ public abstract class BookableResource {
     @Column(nullable = false, length = 30)
     private ResourceStatus status = ResourceStatus.ACTIVE;
 
+    @JsonIgnore
     @OneToMany(mappedBy = "resource")
     private List<Booking> bookings = new ArrayList<>();
 
