@@ -10,6 +10,8 @@ import java.util.ArrayList;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.web.server.ResponseStatusException;
 
 import qa.udst.coworkhub.controller.BookingRequest;
@@ -32,7 +34,12 @@ public class BookingService {
     private final MemberRepository memberRepository;
     private final ResourceRepository resourceRepository;
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public Booking createBooking(BookingRequest request) {
+        if (request.getMemberId() == null || request.getResourceId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Member and resource are required.");
+        }
+
 
         // 1. find member and resource by ID sent
         Member member = memberRepository.findById(request.getMemberId())
@@ -41,7 +48,7 @@ public class BookingService {
                         "Member not found with ID: " + request.getMemberId()
                 ));
 
-        BookableResource resource = resourceRepository.findById(request.getResourceId())
+        BookableResource resource = resourceRepository.findForUpdate(request.getResourceId())
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Resource not found with ID: " + request.getResourceId()
@@ -67,8 +74,9 @@ public class BookingService {
         return bookingRepository.findAll();
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public Booking updateBooking(Long bookingId, BookingRequest request) {
-        Booking booking = bookingRepository.findById(bookingId)
+        Booking booking = bookingRepository.findForUpdate(bookingId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Booking not found with ID: " + bookingId
@@ -87,14 +95,13 @@ public class BookingService {
             );
         }
 
-        BookableResource resource = booking.getResource();
-        if (request.getResourceId() != null) {
-            resource = resourceRepository.findById(request.getResourceId())
+        Long resourceId = request.getResourceId() != null
+                ? request.getResourceId() : booking.getResource().getId();
+        BookableResource resource = resourceRepository.findForUpdate(resourceId)
                     .orElseThrow(() -> new ResponseStatusException(
                             HttpStatus.NOT_FOUND,
                             "Resource not found with ID: " + request.getResourceId()
                     ));
-        }
 
         // check business rules
         checkRules(resource, request, bookingId);
@@ -149,6 +156,10 @@ public class BookingService {
                     HttpStatus.BAD_REQUEST,
                     "Start time, end time and attendees are required."
             );
+        }
+
+        if (request.getAttendees() < 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Attendees must be at least 1.");
         }
 
         // if bookings overlap

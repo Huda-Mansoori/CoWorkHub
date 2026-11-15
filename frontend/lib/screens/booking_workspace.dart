@@ -63,6 +63,14 @@ class _BookingWorkspaceState extends State<BookingWorkspace> {
       resources = data.$2;
       bookings = data.$3;
     }
+    if (!members.any((member) => member.id == memberId)) memberId = null;
+    if (!resources.any((resource) => resource.id == resourceId)) {
+      resourceId = null;
+    }
+    if (!members.any((member) => member.id == filterMember)) {
+      filterMember = null;
+    }
+    results = null;
     loaded = true;
   }
 

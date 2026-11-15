@@ -1,6 +1,7 @@
 
 package qa.udst.coworkhub.entity;
 
+import jakarta.validation.constraints.*;
 import jakarta.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,9 +17,14 @@ public class Member {
     private Long id;
 
     @Column(nullable = false, length = 150)
+    @NotBlank
+    @Size(max = 150)
     private String fullName;
 
     @Column(nullable = false, unique = true, length = 150)
+    @NotBlank
+    @Email
+    @Size(max = 150)
     private String email;
 
     @JsonIgnore

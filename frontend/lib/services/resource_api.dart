@@ -1,77 +1,39 @@
-import 'dart:convert';
-
-
 import 'package:http/http.dart' as http;
 
+import '../models/booking.dart';
+import 'booking_api.dart';
+
 class ResourceApi {
-  // 1- Backend Address
-  final String baseUrl = 'http://localhost:8080/api/resources';
+  final http.Client _client = http.Client();
+  late final BookingApi _api = BookingApi(
+    const String.fromEnvironment(
+      'COWORK_API_BASE',
+      defaultValue: 'http://localhost:8080/api',
+    ),
+    _client,
+  );
 
-  // 2- Get all resources
-  Future<List<dynamic>> getResources() async {
-    final response = await http.get(Uri.parse(baseUrl));
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Failed to load resources');
-    }
+  Future<List<dynamic>> getResources() async =>
+      await _api.request('GET', 'resources') as List;
+  Future<void> addMeetingRoom(Json room) async {
+    await _api.request('POST', 'resources/rooms', body: room);
   }
 
-  // 3- Add a meeting room
-  Future<void> addMeetingRoom(Map<String, dynamic> room) async {
-    final response = await http.post(
-      Uri.parse(('$baseUrl/rooms')),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(room),
-    );
-    if (response.statusCode != 201) {
-      throw Exception('Failed to add meeting room: ${response.body}');
-    }
+  Future<void> addDesk(Json desk) async {
+    await _api.request('POST', 'resources/desks', body: desk);
   }
 
-  // 4- Add desk
-  Future<void> addDesk(Map<String, dynamic> desk) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/desks'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(desk),
-    );
-    if (response.statusCode != 201) {
-      throw Exception('Failed to add desk: ${response.body}');
-    }
+  Future<void> updateMeetingRoom(int id, Json room) async {
+    await _api.request('PUT', 'resources/rooms/$id', body: room);
   }
 
-  // 5- Update a meeting room
-  Future<void> updateMeetingRoom(int id, Map<String, dynamic> room) async {
-    final response = await http.put(
-      Uri.parse('$baseUrl/rooms/$id'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(room),
-    );
-    if (response.statusCode != 200) {
-      throw Exception('Failed to update meeting room: ${response.body}');
-    }
+  Future<void> updateDesk(int id, Json desk) async {
+    await _api.request('PUT', 'resources/desks/$id', body: desk);
   }
 
-  // 6. UPDATE A DESK
-  Future<void> updateDesk(int id, Map<String, dynamic> desk) async {
-    final response = await http.put(
-      Uri.parse('$baseUrl/desks/$id'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(desk),
-    );
-
-    if (response.statusCode != 200) {
-      throw Exception('Failed to update desk: ${response.body}');
-    }
-  }
-
-  // 7. DELETE A RESOURCE
   Future<void> deleteResource(int id) async {
-    final response = await http.delete(Uri.parse('$baseUrl/$id'));
-
-    if (response.statusCode != 204) {
-      throw Exception('Failed to delete resource: ${response.body}');
-    }
+    await _api.request('DELETE', 'resources/$id');
   }
+
+  void close() => _client.close();
 }

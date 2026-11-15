@@ -1,6 +1,10 @@
 
 package qa.udst.coworkhub.repository;
 
+import java.util.Optional;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
+
 import qa.udst.coworkhub.entity.Booking;
 import qa.udst.coworkhub.entity.BookingStatus;
 
@@ -14,6 +18,10 @@ import java.util.List;
 
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, Long> {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select entity from Booking entity where entity.id = :id")
+    Optional<Booking> findForUpdate(@org.springframework.data.repository.query.Param("id") Long id);
+
 
     // Find bookings belonging to a specific member
     List<Booking> findByMemberId(Long memberId);

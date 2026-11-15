@@ -1,6 +1,10 @@
 
 package qa.udst.coworkhub.repository;
 
+import java.util.Optional;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
+
 import qa.udst.coworkhub.entity.BookableResource;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -12,6 +16,10 @@ import java.util.List;
 @Repository
 public interface ResourceRepository
         extends JpaRepository<BookableResource, Long> {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select entity from BookableResource entity where entity.id = :id")
+    Optional<BookableResource> findForUpdate(@org.springframework.data.repository.query.Param("id") Long id);
+
 
     // Find resources by status
     List<BookableResource> findByStatus(

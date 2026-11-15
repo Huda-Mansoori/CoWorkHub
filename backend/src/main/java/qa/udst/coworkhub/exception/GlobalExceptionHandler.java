@@ -33,4 +33,23 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(code)
                 .body(new ErrorResponse(code, "Error", e.getReason()));
     }
+
+    @ExceptionHandler(org.springframework.web.bind.MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidation(
+            org.springframework.web.bind.MethodArgumentNotValidException e) {
+        String message = e.getBindingResult().getFieldErrors().stream()
+                .map(error -> error.getField() + " " + error.getDefaultMessage())
+                .findFirst().orElse("Please check the submitted information.");
+        return ResponseEntity.badRequest().body(new ErrorResponse(400, "Bad Request", message));
+    }
+
+    @ExceptionHandler({
+        org.springframework.http.converter.HttpMessageNotReadableException.class,
+        org.springframework.web.bind.MissingServletRequestParameterException.class,
+        org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class
+    })
+    public ResponseEntity<ErrorResponse> handleInvalidRequest(Exception e) {
+        return ResponseEntity.badRequest()
+                .body(new ErrorResponse(400, "Bad Request", "Please provide valid required fields and dates."));
+    }
 }

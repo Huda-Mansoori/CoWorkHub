@@ -7,6 +7,7 @@ import qa.udst.coworkhub.entity.Desk;
 import qa.udst.coworkhub.entity.ResourceStatus;
 import qa.udst.coworkhub.service.ResourceService;
 
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -41,7 +42,7 @@ public class ResourceController {
     // Create a meeting room
     @PostMapping("/rooms")
     public ResponseEntity<BookableResource> createMeetingRoom(
-            @RequestBody MeetingRoom room) {
+            @Valid @RequestBody MeetingRoom room) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(resourceService.createResource(room));
     }
@@ -49,7 +50,7 @@ public class ResourceController {
     // Create a desk
     @PostMapping("/desks")
     public ResponseEntity<BookableResource> createDesk(
-            @RequestBody Desk desk) {
+            @Valid @RequestBody Desk desk) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(resourceService.createResource(desk));
     }
@@ -58,7 +59,7 @@ public class ResourceController {
     @PutMapping("/rooms/{id}")
     public ResponseEntity<BookableResource> updateMeetingRoom(
             @PathVariable Long id,
-            @RequestBody MeetingRoom room) {
+            @Valid @RequestBody MeetingRoom room) {
         return ResponseEntity.ok(
                 resourceService.updateResource(id, room));
     }
@@ -67,7 +68,7 @@ public class ResourceController {
     @PutMapping("/desks/{id}")
     public ResponseEntity<BookableResource> updateDesk(
             @PathVariable Long id,
-            @RequestBody Desk desk) {
+            @Valid @RequestBody Desk desk) {
         return ResponseEntity.ok(
                 resourceService.updateResource(id, desk));
     }

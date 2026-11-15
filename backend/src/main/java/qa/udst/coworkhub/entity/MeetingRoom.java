@@ -9,10 +9,10 @@ import jakarta.persistence.Entity;
 public class MeetingRoom extends BookableResource {
 
     @Column(nullable = false)
-    private Boolean projector;
+    private Boolean projector = false;
 
     @Column(nullable = false)
-    private Boolean videoConference;
+    private Boolean videoConference = false;
 
     // Default constructor
     public MeetingRoom() {

@@ -4,6 +4,7 @@ package qa.udst.coworkhub.controller;
 import qa.udst.coworkhub.entity.Member;
 import qa.udst.coworkhub.service.MemberService;
 
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -38,7 +39,7 @@ public class MemberController {
     // Register a new member
     @PostMapping
     public ResponseEntity<Member> createMember(
-            @RequestBody Member member) {
+            @Valid @RequestBody Member member) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(memberService.createMember(member));
     }
@@ -47,7 +48,7 @@ public class MemberController {
     @PutMapping("/{id}")
     public ResponseEntity<Member> updateMember(
             @PathVariable Long id,
-            @RequestBody Member member) {
+            @Valid @RequestBody Member member) {
         return ResponseEntity.ok(
                 memberService.updateMember(id, member));
     }

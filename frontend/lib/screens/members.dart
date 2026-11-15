@@ -28,6 +28,12 @@ class _MembersState extends State<Members> {
     loadMembers();
   }
 
+  @override
+  void dispose() {
+    memberApi.close();
+    super.dispose();
+  }
+
   Future<void> loadMembers() async {
     setState(() {
       isLoading = true;
@@ -191,22 +197,6 @@ class _MembersState extends State<Members> {
 
   // 6. DELETE MEMBER
   Future<void> deleteMember(Map<String, String> member) async {
-    // 6.1 CHECK LOCAL BOOKING HISTORY
-    bool hasBooking = widget.catalog.bookings.any(
-      (b) => b.slot.memberId.toString() == member['id'],
-    );
-
-    if (hasBooking) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'This member has booking history and cannot be deleted.',
-          ),
-        ),
-      );
-      return;
-    }
-
     // 6.2 DELETE FROM BACKEND
     try {
       await memberApi.deleteMember(member['id']!);
@@ -217,8 +207,9 @@ class _MembersState extends State<Members> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Failed to delete member')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
     }
   }
 
@@ -284,9 +275,12 @@ class _MembersState extends State<Members> {
                 String newName = name.text.trim();
                 String newEmail = email.text.trim();
 
-                if (newName.isEmpty || newEmail.isEmpty) {
+                if (newName.isEmpty ||
+                    !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(newEmail)) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Please fill in all fields')),
+                    SnackBar(
+                      content: Text('Enter a name and a valid email address.'),
+                    ),
                   );
                   return;
                 }
@@ -314,7 +308,11 @@ class _MembersState extends State<Members> {
                   if (!mounted) return;
 
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to save member')),
+                    SnackBar(
+                      content: Text(
+                        e.toString().replaceFirst('Exception: ', ''),
+                      ),
+                    ),
                   );
                 }
               },

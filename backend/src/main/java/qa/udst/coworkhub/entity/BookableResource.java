@@ -1,5 +1,6 @@
 package qa.udst.coworkhub.entity;
 
+import jakarta.validation.constraints.*;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -16,19 +17,29 @@ public abstract class BookableResource {
     private Long id;
 
     @Column(nullable = false, length = 150)
+    @NotBlank
+    @Size(max = 150)
     private String name;
 
     @Column(nullable = false, length = 150)
+    @NotBlank
+    @Size(max = 150)
     private String location;
 
     @Column(nullable = false)
+    @NotNull
+    @Positive
     private Integer capacity;
 
     @Column(nullable = false, precision = 10, scale = 2)
+    @NotNull
+    @DecimalMin("0.01")
+    @Digits(integer = 8, fraction = 2)
     private BigDecimal hourlyRate;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
+    @NotNull
     private ResourceStatus status = ResourceStatus.ACTIVE;
 
     @JsonIgnore

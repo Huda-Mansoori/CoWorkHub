@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../services/demo_catalog.dart';
 import '../services/resource_api.dart';
 
@@ -33,6 +34,12 @@ class _ResourcesState extends State<Resources> {
     loadResources();
   }
 
+  @override
+  void dispose() {
+    resourceApi.close();
+    super.dispose();
+  }
+
   Future<void> loadResources() async {
     setState(() {
       isLoading = true;
@@ -64,25 +71,25 @@ class _ResourcesState extends State<Resources> {
   // 3. SEARCH AND FILTER LOGIC
   List<Map<String, dynamic>> get visibleResources {
     return resources.where((resource) {
-      String type =
-          resource.containsKey('projector') ? 'Meeting Room' : 'Desk';
+      String type = resource.containsKey('projector') ? 'Meeting Room' : 'Desk';
 
-      bool nameMatches = resource['name']
-          .toString()
-          .toLowerCase()
-          .contains(searchText.toLowerCase());
+      bool nameMatches = resource['name'].toString().toLowerCase().contains(
+        searchText.toLowerCase(),
+      );
 
       bool typeMatches = selectedType == 'All' || selectedType == type;
 
-      bool capacityMatches = selectedCapacity == 'Any' ||
-          (resource['capacity'] as num).toInt() >=
-              int.parse(selectedCapacity);
+      bool capacityMatches =
+          selectedCapacity == 'Any' ||
+          (resource['capacity'] as num).toInt() >= int.parse(selectedCapacity);
 
-      bool locationMatches = selectedLocation == 'All Locations' ||
+      bool locationMatches =
+          selectedLocation == 'All Locations' ||
           resource['location'].toString().toLowerCase() ==
               selectedLocation.toLowerCase();
 
-      bool priceMatches = selectedPrice == 'Any Price' ||
+      bool priceMatches =
+          selectedPrice == 'Any Price' ||
           (resource['hourlyRate'] as num).toDouble() <=
               double.parse(selectedPrice);
 
@@ -134,33 +141,34 @@ class _ResourcesState extends State<Resources> {
             runSpacing: 10,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              filterDropdown(
-                'Resource Type',
-                selectedType,
-                ['All', 'Meeting Room', 'Desk'],
-                (value) => setState(() => selectedType = value),
-              ),
+              filterDropdown('Resource Type', selectedType, [
+                'All',
+                'Meeting Room',
+                'Desk',
+              ], (value) => setState(() => selectedType = value)),
 
-              filterDropdown(
-                'Minimum Capacity',
-                selectedCapacity,
-                ['Any', '1', '2', '5', '10'],
-                (value) => setState(() => selectedCapacity = value),
-              ),
+              filterDropdown('Minimum Capacity', selectedCapacity, [
+                'Any',
+                '1',
+                '2',
+                '5',
+                '10',
+              ], (value) => setState(() => selectedCapacity = value)),
 
-              filterDropdown(
-                'Location',
-                selectedLocation,
-                ['All Locations', 'Floor 1', 'Floor 2', 'Floor 3'],
-                (value) => setState(() => selectedLocation = value),
-              ),
+              filterDropdown('Location', selectedLocation, [
+                'All Locations',
+                'Floor 1',
+                'Floor 2',
+                'Floor 3',
+              ], (value) => setState(() => selectedLocation = value)),
 
-              filterDropdown(
-                'Maximum Price',
-                selectedPrice,
-                ['Any Price', '50', '100', '200', '500'],
-                (value) => setState(() => selectedPrice = value),
-              ),
+              filterDropdown('Maximum Price', selectedPrice, [
+                'Any Price',
+                '50',
+                '100',
+                '200',
+                '500',
+              ], (value) => setState(() => selectedPrice = value)),
             ],
           ),
 
@@ -188,28 +196,28 @@ class _ResourcesState extends State<Resources> {
             child: isLoading
                 ? Center(child: CircularProgressIndicator())
                 : errorMessage != null
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('Could not load resources'),
-                            SizedBox(height: 10),
-                            Text(errorMessage!),
-                            ElevatedButton(
-                              onPressed: loadResources,
-                              child: Text('Retry'),
-                            ),
-                          ],
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Could not load resources'),
+                        SizedBox(height: 10),
+                        Text(errorMessage!),
+                        ElevatedButton(
+                          onPressed: loadResources,
+                          child: Text('Retry'),
                         ),
-                      )
-                    : shown.isEmpty
-                        ? Center(child: Text('No resources available'))
-                        : ListView.builder(
-                            itemCount: shown.length,
-                            itemBuilder: (context, index) {
-                              return resourceCard(shown[index]);
-                            },
-                          ),
+                      ],
+                    ),
+                  )
+                : shown.isEmpty
+                ? Center(child: Text('No resources available'))
+                : ListView.builder(
+                    itemCount: shown.length,
+                    itemBuilder: (context, index) {
+                      return resourceCard(shown[index]);
+                    },
+                  ),
           ),
         ],
       ),
@@ -233,10 +241,7 @@ class _ResourcesState extends State<Resources> {
         DropdownButton<String>(
           value: selected,
           items: options.map((option) {
-            return DropdownMenuItem(
-              value: option,
-              child: Text(option),
-            );
+            return DropdownMenuItem(value: option, child: Text(option));
           }).toList(),
           onChanged: (value) {
             if (value != null) {
@@ -259,10 +264,7 @@ class _ResourcesState extends State<Resources> {
             // 6.1 Resource details
             Text(
               resource['name'].toString(),
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
 
             SizedBox(height: 10),
@@ -318,28 +320,9 @@ class _ResourcesState extends State<Resources> {
 
   // 7. DELETE RESOURCE
   Future<void> deleteResource(Map<String, dynamic> resource) async {
-    // 7.1 Check local booking history
-    bool hasBooking = widget.catalog.bookings.any(
-      (b) => b.slot.resourceId.toString() ==
-          resource['id'].toString(),
-    );
-
-    if (hasBooking) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'This resource has booking history and cannot be deleted.',
-          ),
-        ),
-      );
-      return;
-    }
-
     // 7.2 Delete from backend
     try {
-      await resourceApi.deleteResource(
-        (resource['id'] as num).toInt(),
-      );
+      await resourceApi.deleteResource((resource['id'] as num).toInt());
 
       if (!mounted) return;
 
@@ -347,22 +330,20 @@ class _ResourcesState extends State<Resources> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Resource deleted successfully')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Resource deleted successfully')));
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not delete resource: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not delete resource: $e')));
     }
   }
 
   // 8. ADD AND EDIT RESOURCE FORM
-  Future<void> openResourceForm({
-    Map<String, dynamic>? existing,
-  }) async {
+  Future<void> openResourceForm({Map<String, dynamic>? existing}) async {
     // 8.1 Get existing values
     bool editing = existing != null;
 
@@ -387,6 +368,7 @@ class _ResourcesState extends State<Resources> {
         ? 'Desk'
         : 'Meeting Room';
 
+    String status = existing?['status'] ?? 'ACTIVE';
     bool projector = existing?['projector'] ?? false;
     bool videoConference = existing?['videoConference'] ?? false;
     String deskType = existing?['deskType'] ?? 'Regular Desk';
@@ -398,9 +380,7 @@ class _ResourcesState extends State<Resources> {
         return StatefulBuilder(
           builder: (dialogContext, updateDialog) {
             return AlertDialog(
-              title: Text(
-                editing ? 'Edit Resource' : 'Add New Resource',
-              ),
+              title: Text(editing ? 'Edit Resource' : 'Add New Resource'),
 
               content: SingleChildScrollView(
                 child: SizedBox(
@@ -445,22 +425,33 @@ class _ResourcesState extends State<Resources> {
                       SizedBox(height: 15),
 
                       // 8.7 Capacity
-                      inputField(
-                        'Capacity',
-                        capacity,
-                        numeric: true,
-                      ),
+                      inputField('Capacity', capacity, numeric: true),
 
                       SizedBox(height: 15),
 
                       // 8.8 Hourly rate
-                      inputField(
-                        'Hourly Rate (QAR)',
-                        rate,
-                        numeric: true,
-                      ),
+                      inputField('Hourly Rate (QAR)', rate, numeric: true),
 
                       SizedBox(height: 10),
+
+                      DropdownButtonFormField<String>(
+                        initialValue: status,
+                        decoration: const InputDecoration(
+                          labelText: 'Status',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: ['ACTIVE', 'OUT_OF_SERVICE']
+                            .map(
+                              (value) => DropdownMenuItem(
+                                value: value,
+                                child: Text(value),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) =>
+                            updateDialog(() => status = value!),
+                      ),
+                      const SizedBox(height: 15),
 
                       // 8.9 Meeting Room options
                       if (type == 'Meeting Room') ...[
@@ -493,16 +484,17 @@ class _ResourcesState extends State<Resources> {
                             labelText: 'Desk Type',
                             border: OutlineInputBorder(),
                           ),
-                          items: [
-                            'Regular Desk',
-                            'Standing Desk',
-                            'Private Desk',
-                          ].map((value) {
-                            return DropdownMenuItem(
-                              value: value,
-                              child: Text(value),
-                            );
-                          }).toList(),
+                          items:
+                              [
+                                'Regular Desk',
+                                'Standing Desk',
+                                'Private Desk',
+                              ].map((value) {
+                                return DropdownMenuItem(
+                                  value: value,
+                                  child: Text(value),
+                                );
+                              }).toList(),
                           onChanged: (value) {
                             if (value != null) {
                               updateDialog(() {
@@ -540,6 +532,7 @@ class _ResourcesState extends State<Resources> {
                         newCapacity == null ||
                         newCapacity <= 0 ||
                         newRate == null ||
+                        !newRate.isFinite ||
                         newRate <= 0) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -553,9 +546,9 @@ class _ResourcesState extends State<Resources> {
                     Map<String, dynamic> data = {
                       'name': newName,
                       'location': newLocation,
-                      'capacity': newCapacity,
+                      'capacity': type == 'Desk' ? 1 : newCapacity,
                       'hourlyRate': newRate,
-                      'status': existing?['status'] ?? 'ACTIVE',
+                      'status': status,
                     };
 
                     if (type == 'Meeting Room') {
@@ -604,9 +597,7 @@ class _ResourcesState extends State<Resources> {
                       if (!mounted) return;
 
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Could not save resource: $e'),
-                        ),
+                        SnackBar(content: Text('Could not save resource: $e')),
                       );
                     }
                   },
@@ -634,8 +625,7 @@ class _ResourcesState extends State<Resources> {
   }) {
     return TextField(
       controller: controller,
-      keyboardType:
-          numeric ? TextInputType.number : TextInputType.text,
+      keyboardType: numeric ? TextInputType.number : TextInputType.text,
       decoration: InputDecoration(
         labelText: label,
         border: OutlineInputBorder(),
