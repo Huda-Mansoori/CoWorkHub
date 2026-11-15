@@ -5,12 +5,13 @@ import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.ArrayList;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import lombok.RequiredArgsConstructor;
 import qa.udst.coworkhub.controller.BookingRequest;
 import qa.udst.coworkhub.entity.BookableResource;
 import qa.udst.coworkhub.entity.Booking;
@@ -64,6 +65,79 @@ public class BookingService {
 
     public List<Booking> getAllBookings() {
         return bookingRepository.findAll();
+    }
+
+    public Booking updateBooking(Long bookingId, BookingRequest request) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Booking not found with ID: " + bookingId
+                ));
+
+        // change status to cancelled
+        if ("CANCELLED".equals(request.getStatus())) {
+            booking.setStatus(BookingStatus.CANCELLED);
+            return bookingRepository.save(booking);
+        }
+
+        if (booking.getStatus() == BookingStatus.CANCELLED) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Cannot update a cancelled booking."
+            );
+        }
+
+        BookableResource resource = booking.getResource();
+        if (request.getResourceId() != null) {
+            resource = resourceRepository.findById(request.getResourceId())
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.NOT_FOUND,
+                            "Resource not found with ID: " + request.getResourceId()
+                    ));
+        }
+
+        // check business rules
+        checkRules(resource, request, bookingId);
+
+        // update fields
+        booking.setResource(resource);
+        booking.setStartDateTime(request.getStartDateTime());
+        booking.setEndDateTime(request.getEndDateTime());
+        booking.setAttendees(request.getAttendees());
+        booking.setTotalCost(calculateCost(resource, request.getStartDateTime(), request.getEndDateTime()));
+
+        return bookingRepository.save(booking);
+    }
+
+    public List<Booking> getBookingsByMember(Long memberId) {
+        memberRepository.findById(memberId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Member not found with ID: " + memberId
+                ));
+        return bookingRepository.findByMemberId(memberId);
+    }
+
+    // ACTIVE status and no overlapping bookings
+    public List<BookableResource> getAvailableResources(LocalDateTime start, LocalDateTime end) {
+        if (!start.isBefore(end)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Start time must be before end time."
+            );
+        }
+        List<BookableResource> availableResources = new ArrayList<>();
+        for (BookableResource resource : resourceRepository.findByStatus(ResourceStatus.ACTIVE)) {
+            boolean booked = bookingRepository.hasOverlappingBooking(
+                    resource.getId(),
+                    BookingStatus.CONFIRMED,
+                    start,
+                    end);
+            if (!booked) {
+                availableResources.add(resource);
+            }
+        }
+        return availableResources;
     }
 
     private void checkRules(BookableResource resource, BookingRequest request, Long bookingId) {
