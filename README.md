@@ -1,231 +1,288 @@
 # CoWorkHub
+
 ## Coworking Space & Meeting Room Booking System
 
-CoWorkHub is a desktop application designed to manage coworking spaces, desks, meeting rooms, members, and bookings. It provides a centralized platform for managing resources and booking activities.
+CoWorkHub is a desktop application for managing coworking resources,
+members, availability, and bookings. The project uses a Flutter desktop
+client connected to a Spring Boot REST API and a MySQL database.
 
-## 1. Project Overview
+## Technology Stack
 
-The system allows users to:
-- View and manage coworking resources.
-- Add, update, and delete desks and meeting rooms.
-- Register and manage members.
-- Check resource availability.
-- Create, update, and cancel bookings.
-- Calculate booking costs.
-- Prevent overlapping confirmed bookings.
+-   **Frontend:** Flutter and Dart (desktop)
+-   **Backend:** Java 21, Spring Boot, Spring Data JPA / Hibernate
+-   **Database:** MySQL 8
+-   **Communication:** REST API using JSON over HTTP
+-   **Deployment:** Docker Compose
 
-## 2. Technologies Used
+## Project Structure
 
-| Component | Technology |
-|---|---|
-| Frontend | Flutter Desktop (Dart) |
-| Backend | Java 21, Spring Boot |
-| Database | MySQL 8.0 |
-| ORM | Spring Data JPA / Hibernate |
-| API | REST API (JSON) |
-| Containerization | Docker and Docker Compose |
-| Version Control | Git and GitHub |
-
-## 3. Project Architecture
-
-The application follows a layered architecture:
-
-1. **Presentation Layer:** Flutter desktop application.
-2. **API Layer:** Spring Boot REST controllers.
-3. **Service Layer:** Business logic and validation.
-4. **Repository Layer:** Database operations using Spring Data JPA.
-5. **Database Layer:** MySQL relational database.
-
-Flutter communicates with the Spring Boot backend through HTTP requests using JSON.
-
-## 4. Project Structure
-
-```text
+``` text
 CoWorkHub/
-│
-├── backend/
-│   ├── src/
-│   │   └── main/
-│   │       ├── java/
-│   │       └── resources/
-│   ├── Dockerfile
-│   ├── pom.xml
-│   └── mvnw
-│
-├── frontend/
-│   ├── lib/
-│   │   ├── models/
-│   │   ├── screens/
-│   │   └── services/
-│   └── pubspec.yaml
-│
+├── backend/                 # Spring Boot application
+├── frontend/                # Flutter desktop application
 ├── docs/
-│   └── erd/
-│
-├── .env.example
-├── docker-compose.yml
+│   └── erd/Diagrams/        # Database and ERD documentation
+├── docker-compose.yml       # MySQL and backend services
+├── .env.example             # Environment variable template
 ├── .gitignore
 └── README.md
 ```
 
-## 5. Prerequisites
+## Prerequisites
 
-Install the following before running the project:
+Install the following tools before running the project:
 
-- Git
-- Docker Desktop
-- Flutter SDK
-- Java 21 (for local backend development)
-- Visual Studio with Desktop development with C++ workload (for Windows Flutter desktop builds)
+-   Git
+-   Docker Desktop with Docker Compose
+-   Flutter SDK (including the Windows desktop toolchain if running on
+    Windows)
+-   Java 21 (for running or testing the backend outside Docker)
+-   A code editor such as Visual Studio Code
 
-## 6. Running the Project with Docker
+Check your installations:
 
-Docker Compose runs the Spring Boot backend and MySQL database.
+``` bash
+docker --version
+docker compose version
+flutter --version
+java -version
+```
 
-### Step 1: Clone the repository
+## 1. Get the Project
 
-```bash
+Clone the repository:
+
+``` bash
 git clone https://github.com/Huda-Mansoori/CoWorkHub.git
 cd CoWorkHub
 ```
 
-### Step 2: Create the environment file
+## 2. Configure Environment Variables
 
-Copy `.env.example` and rename the copy to `.env`.
+Create a local `.env` file from the example:
 
-On Windows PowerShell:
+**Windows PowerShell**
 
-```powershell
+``` powershell
 Copy-Item .env.example .env
 ```
 
-Open `.env` and replace the placeholder with your own MySQL password.
+**macOS / Linux**
 
-**Important:** Never upload your private `.env` file to GitHub.
-
-### Step 3: Start Docker Desktop
-
-Make sure Docker Desktop is running.
-
-### Step 4: Build and start the services
-
-From the project root directory, run:
-
-```bash
-docker compose up --build -d
+``` bash
+cp .env.example .env
 ```
 
-This starts:
-- MySQL database on host port `3307`.
-- Spring Boot backend on port `8080`.
+Open `.env` and review the values. Set the database name, database
+username, database password, and any backend database connection
+settings required by the Compose configuration.
 
-### Step 5: Verify the containers
+The `.env.example` file contains placeholders only. Use your own local
+values in `.env`; do not commit `.env` or real credentials to GitHub.
 
-```bash
-docker compose ps
+## 3. Start the Backend and Database with Docker
+
+From the project root (the folder containing `docker-compose.yml`), run:
+
+``` bash
+docker compose up --build
 ```
 
-The expected services are:
-- `coworkhub-mysql` — Up (healthy)
-- `coworkhub-backend` — Up
+This starts the MySQL database and builds/runs the Spring Boot backend.
+The database uses a persistent Docker volume so its data remains
+available when containers are restarted.
 
-### Step 6: Test the backend
+Wait until the database is healthy and the backend has finished
+starting.
 
-Open the following URL or run the command:
+The backend API is configured for:
 
-```bash
-curl http://localhost:8080/api/resources
-```
-
-The API should return the available resources in JSON format.
-
-### Step 7: Run the Flutter desktop application
-
-Open a separate terminal:
-
-```bash
-cd frontend
-flutter pub get
-flutter run -d windows
-```
-
-The Flutter application communicates with the backend at:
-
-```text
+``` text
 http://localhost:8080/api
 ```
 
-### Stopping Docker services
+The MySQL container is exposed on host port `3307` (container port
+`3306`) in the supplied Compose setup.
 
-To stop and remove the containers:
+To view running containers:
 
-```bash
+``` bash
+docker compose ps
+```
+
+To view backend logs:
+
+``` bash
+docker compose logs -f backend
+```
+
+To stop the services without deleting the database volume:
+
+``` bash
 docker compose down
 ```
 
-The database volume is preserved.
+**Do not use `docker compose down -v` unless you intentionally want to
+delete the persistent database data.**
 
-To remove the containers and database volume permanently:
+## 4. Run the Flutter Desktop Application
 
-```bash
-docker compose down -v
+Keep Docker Compose running. Open a second terminal and move to the
+frontend folder:
+
+``` bash
+cd frontend
 ```
 
-**Warning:** The second command deletes the Docker database data.
+Get the Flutter dependencies:
+
+``` bash
+flutter pub get
+```
+
+Run the desktop application on Windows:
+
+``` bash
+flutter run -d windows
+```
+
+If you are using another desktop platform, first enable that Flutter
+desktop target and use its device name with `flutter run -d`.
+
+The Flutter application connects to the backend at
+`http://localhost:8080/api` by default. To use a different API address,
+provide the `COWORK_API_BASE` Dart define when launching the app:
+
+``` bash
+flutter run -d windows --dart-define=COWORK_API_BASE=http://localhost:8080/api
+```
+
+## 5. Run Tests and Code Checks
+
+### Backend tests
+
+From the backend folder:
+
+**Windows PowerShell**
+
+``` powershell
+cd backend
+.\mvnw.cmd clean test
+```
+
+**macOS / Linux**
+
+``` bash
+cd backend
+./mvnw clean test
+```
+
+If the Maven wrapper is unavailable, use an installed Maven version:
+
+``` bash
+mvn clean test
+```
+
+### Flutter analysis and widget tests
+
+From the frontend folder:
+
+``` bash
+flutter analyze
+flutter test
+```
+
+The Flutter widget tests use the in-memory demo catalog so they do not
+require a running backend or make real HTTP requests.
+
+## 6. Main Application Features
+
+-   View and manage coworking resources, including desks and meeting
+    rooms.
+-   View and manage members.
+-   Check resource availability for a selected time period and attendee
+    count.
+-   Create and manage bookings.
+-   Cancel existing bookings.
+-   Validate booking details, including resource capacity and desk
+    attendee limits.
+-   Prevent conflicting bookings for the same resource and time.
+-   Calculate booking costs using the resource hourly rate.
 
 ## 7. Backend API
 
-The backend exposes REST endpoints for resource and member management.
+The backend API base URL is:
 
-| Method | Endpoint | Purpose |
-|---|---|---|
-| GET | `/api/resources` | Retrieve all resources |
-| GET | `/api/resources/{id}` | Retrieve a resource |
-| POST | `/api/resources/rooms` | Create a meeting room |
-| POST | `/api/resources/desks` | Create a desk |
-| PUT | `/api/resources/rooms/{id}` | Update a meeting room |
-| PUT | `/api/resources/desks/{id}` | Update a desk |
-| DELETE | `/api/resources/{id}` | Delete a resource |
-| GET | `/api/members` | Retrieve all members |
-| GET | `/api/members/{id}` | Retrieve a member |
-| POST | `/api/members` | Create a member |
-| PUT | `/api/members/{id}` | Update a member |
-| DELETE | `/api/members/{id}` | Delete a member |
+``` text
+http://localhost:8080/api
+```
 
-Booking API endpoints will be documented once the booking backend implementation and integration are completed.
+The main API areas include:
 
-## 8. Database Design
+  Area                       Endpoint examples
+  -------------------------- ----------------------------
+  Resources                  `GET /resources`
+  Available resources        `GET /resources/available`
+  Members                    `GET /members`
+  Bookings                   `GET /bookings`
+  Create booking             `POST /bookings`
+  Update or cancel booking   `PUT /bookings/{id}`
 
-The system uses MySQL with Spring Data JPA and Hibernate.
+For availability checks, the endpoint accepts `start` and `end` query
+parameters. Booking requests include the member ID, resource ID, start
+and end date-time, and attendee count.
 
-Main entities include:
-- `BookableResource`
-- `MeetingRoom`
-- `Desk`
-- `Member`
-- `Booking`
+## 8. Troubleshooting
 
-The resource hierarchy uses the JPA `JOINED` inheritance strategy.
+### Backend is not reachable
 
-Bookings are associated with members and resources through many-to-one relationships.
+-   Confirm Docker Desktop is running.
+-   Check the containers with `docker compose ps`.
+-   Review backend logs with `docker compose logs -f backend`.
+-   Confirm that port `8080` is not being used by another process.
 
-## 9. Team Responsibilities
+### Database connection fails
 
-The project is developed by a team of four members.
+-   Confirm the MySQL container is healthy.
+-   Check the database settings in `.env` against the Compose
+    configuration.
+-   Check database logs with `docker compose logs -f db`.
 
-| Member | Responsibilities |
-|---|---|
-| Member 1 – Team Leader | Backend architecture, JPA entities, database relationships, resource APIs, Docker setup and GitHub coordination |
-| Member 2 | Booking and member functionality, availability validation and booking business logic |
-| Member 3 | Flutter dashboard, resource management and member management screens |
-| Member 4 | Availability, new booking and booking screens, Dart models and API integration |
+### Flutter cannot connect to the backend
 
-## 10. Repository
+-   Make sure the backend container has finished starting.
+-   Confirm the API address is `http://localhost:8080/api`.
+-   If needed, launch Flutter with the `COWORK_API_BASE` define shown
+    above.
 
-GitHub Repository:
+### Flutter desktop target is unavailable
 
-https://github.com/Huda-Mansoori/CoWorkHub
+Run:
 
----
+``` bash
+flutter doctor
+flutter devices
+```
 
-**CoWorkHub – Coworking Space & Meeting Room Booking System**
+Follow Flutter Doctor's instructions to install the desktop build tools
+for your operating system.
+
+## 9. Security and Repository Notes
+
+-   Keep local credentials in `.env`; do not commit secrets.
+-   `.env.example` should contain placeholders, not working passwords.
+-   Do not delete the persistent database volume when stopping
+    containers unless the database contents are no longer needed.
+-   Generated folders such as `backend/target/`, `frontend/build/`, and
+    `frontend/.dart_tool/` are build artifacts and should not be
+    included in the final source-code ZIP.
+
+## Contributors
+
+CoWorkHub was developed as a team university project. Add or maintain
+the full names and contributions of all team members here before the
+final submission.
+
+------------------------------------------------------------------------
+
+**Repository:** https://github.com/Huda-Mansoori/CoWorkHub
