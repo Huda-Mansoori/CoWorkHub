@@ -1,12 +1,16 @@
+
 import 'package:flutter/material.dart';
 import 'screens/dashboard.dart';
 
 void main() {
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final String? apiBase;
+
+  const MyApp({super.key, this.apiBase});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -16,7 +20,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
-      home: Dashboard(),
+      home: Dashboard(apiBase: apiBase),
     );
   }
 }

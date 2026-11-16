@@ -9,21 +9,21 @@ class BookingWorkspace extends StatefulWidget {
   final int page;
   final DemoCatalog catalog;
   final ValueChanged<int> navigate;
+  final String? apiBase;
+
   const BookingWorkspace({
     super.key,
     required this.page,
     required this.catalog,
     required this.navigate,
+    this.apiBase,
   });
   @override
   State<BookingWorkspace> createState() => _BookingWorkspaceState();
 }
 
 class _BookingWorkspaceState extends State<BookingWorkspace> {
-  static const base = String.fromEnvironment(
-    'COWORK_API_BASE',
-    defaultValue: 'http://localhost:8080/api',
-  );
+  late final String base;
   final client = http.Client();
   late final api = BookingApi(base, client);
   final count = TextEditingController(text: '1');
@@ -39,6 +39,11 @@ class _BookingWorkspaceState extends State<BookingWorkspace> {
   @override
   void initState() {
     super.initState();
+    base = widget.apiBase ??
+        const String.fromEnvironment(
+          'COWORK_API_BASE',
+          defaultValue: 'http://localhost:8080/api',
+        );
     final now = DateTime.now();
     start = DateTime(now.year, now.month, now.day, now.hour + 1);
     end = start.add(const Duration(hours: 1));
