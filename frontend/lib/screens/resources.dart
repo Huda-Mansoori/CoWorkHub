@@ -320,6 +320,37 @@ class _ResourcesState extends State<Resources> {
 
   // 7. DELETE RESOURCE
   Future<void> deleteResource(Map<String, dynamic> resource) async {
+    // 7.1 Ask user before deleting
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text('Delete Resource'),
+          content: Text('Are you sure you want to delete ${resource['name']}?'),
+          actions: [
+            // Cancel button
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, false);
+              },
+              child: Text('Cancel'),
+            ),
+
+            // Confirm delete button
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, true);
+              },
+              child: Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    // Stop if user cancels
+    if (confirm != true || !mounted) return;
+
     // 7.2 Delete from backend
     try {
       await resourceApi.deleteResource((resource['id'] as num).toInt());

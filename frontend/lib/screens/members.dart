@@ -197,16 +197,54 @@ class _MembersState extends State<Members> {
 
   // 6. DELETE MEMBER
   Future<void> deleteMember(Map<String, String> member) async {
-    // 6.2 DELETE FROM BACKEND
+    // 6.1 Ask for confirmation before deleting
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text('Delete Member'),
+          content: Text('Are you sure you want to delete ${member['name']}?'),
+          actions: [
+            // Cancel button
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, false);
+              },
+              child: Text('Cancel'),
+            ),
+
+            // Delete button
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, true);
+              },
+              child: Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    // 6.2 Stop if user cancels
+    if (confirm != true || !mounted) return;
+
+    // 6.3 Delete member from backend
     try {
       await memberApi.deleteMember(member['id']!);
 
       if (!mounted) return;
 
       await loadMembers();
+
+      if (!mounted) return;
+
+      // Show success message
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Member deleted successfully')));
     } catch (e) {
       if (!mounted) return;
 
+      // Show error message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
       );
