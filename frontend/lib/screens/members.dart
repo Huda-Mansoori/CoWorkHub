@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
+import '../services/booking_api.dart';
+import 'member_bookings_dialog.dart';
 
 import '../services/demo_catalog.dart';
 import '../services/member_api.dart';
@@ -15,6 +19,14 @@ class Members extends StatefulWidget {
 class _MembersState extends State<Members> {
   // 1. MEMBER DATA
   final MemberApi memberApi = MemberApi();
+  final http.Client bookingClient = http.Client();
+  late final BookingApi bookingApi = BookingApi(
+    const String.fromEnvironment(
+      'COWORK_API_BASE',
+      defaultValue: 'http://localhost:8080/api',
+    ),
+    bookingClient,
+  );
 
   List<Map<String, String>> members = [];
   String searchText = '';
@@ -31,6 +43,7 @@ class _MembersState extends State<Members> {
   @override
   void dispose() {
     memberApi.close();
+    bookingClient.close();
     super.dispose();
   }
 
@@ -165,6 +178,7 @@ class _MembersState extends State<Members> {
     return Card(
       child: ListTile(
         // 5.1 MEMBER DETAILS
+        onTap: () => viewBookings(member),
         title: Text(member['name'] ?? ''),
         subtitle: Text(member['email'] ?? ''),
 
@@ -172,6 +186,11 @@ class _MembersState extends State<Members> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            IconButton(
+              icon: const Icon(Icons.history),
+              tooltip: 'View bookings',
+              onPressed: () => viewBookings(member),
+            ),
             // 5.2.1 EDIT MEMBER
             IconButton(
               icon: Icon(Icons.edit),
@@ -191,6 +210,17 @@ class _MembersState extends State<Members> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void viewBookings(Map<String, String> member) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => MemberBookingsDialog(
+        memberId: int.parse(member['id']!),
+        memberName: member['name'] ?? 'Member',
+        api: bookingApi,
       ),
     );
   }

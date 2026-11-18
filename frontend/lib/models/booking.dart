@@ -56,13 +56,21 @@ class Booking {
   final Reservation slot;
   final String status;
   final double cost;
-  const Booking(this.id, this.slot, this.status, this.cost);
+  final String? resourceName;
+  const Booking(
+    this.id,
+    this.slot,
+    this.status,
+    this.cost, {
+    this.resourceName,
+  });
   Booking.fromJson(Json j)
     : this(
         j['id'],
         Reservation.fromJson(j),
         j['status'],
         (j['totalCost'] as num).toDouble(),
+        resourceName: j['resource']?['name'],
       );
   bool conflicts(int resourceId, DateTime start, DateTime end) =>
       status == 'CONFIRMED' &&

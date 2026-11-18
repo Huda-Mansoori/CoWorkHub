@@ -50,6 +50,8 @@ class BookingApi {
   Future<List<Resource>> resources() => list('resources', Resource.fromJson);
   Future<List<Member>> members() => list('members', Member.fromJson);
   Future<List<Booking>> bookings() => list('bookings', Booking.fromJson);
+  Future<List<Booking>> memberBookings(int memberId) =>
+      list('bookings/member/$memberId', Booking.fromJson);
   Future<List<Resource>> available(DateTime start, DateTime end) => list(
     'resources/available',
     Resource.fromJson,
