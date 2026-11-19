@@ -1,6 +1,7 @@
-
 import 'package:flutter/material.dart';
+
 import 'screens/dashboard.dart';
+import 'theme/app_theme.dart';
 
 void main() {
   runApp(const MyApp());
@@ -16,10 +17,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'CoWorkHub',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
+      theme: buildAppTheme(),
       home: Dashboard(apiBase: apiBase),
     );
   }
