@@ -12,7 +12,8 @@ import '../widgets/resource_card.dart';
 class Resources extends StatefulWidget {
   final DemoCatalog catalog;
   final String? apiBase;
-  const Resources(this.catalog, {super.key, this.apiBase});
+  final FocusNode? searchFocus;
+  const Resources(this.catalog, {super.key, this.apiBase, this.searchFocus});
   @override
   State<Resources> createState() => _ResourcesState();
 }
@@ -20,7 +21,7 @@ class Resources extends StatefulWidget {
 class _ResourcesState extends State<Resources> {
   late final ResourceApi api = ResourceApi(base: widget.apiBase);
   final search = TextEditingController();
-  final searchFocus = FocusNode();
+  late final searchFocus = widget.searchFocus ?? FocusNode();
   List<Json> resources = [];
   String type = 'All', location = 'All locations';
   int? capacity;
@@ -38,7 +39,7 @@ class _ResourcesState extends State<Resources> {
   void dispose() {
     api.close();
     search.dispose();
-    searchFocus.dispose();
+    if (widget.searchFocus == null) searchFocus.dispose();
     super.dispose();
   }
 

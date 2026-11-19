@@ -13,7 +13,8 @@ import 'member_bookings_dialog.dart';
 class Members extends StatefulWidget {
   final DemoCatalog catalog;
   final String? apiBase;
-  const Members(this.catalog, {super.key, this.apiBase});
+  final FocusNode? searchFocus;
+  const Members(this.catalog, {super.key, this.apiBase, this.searchFocus});
   @override
   State<Members> createState() => _MembersState();
 }
@@ -26,7 +27,7 @@ class _MembersState extends State<Members> {
     bookingClient,
   );
   final search = TextEditingController();
-  final searchFocus = FocusNode();
+  late final searchFocus = widget.searchFocus ?? FocusNode();
   List<Map<String, String>> members = [];
   bool loading = true, deleting = false;
   String? error;
@@ -42,7 +43,7 @@ class _MembersState extends State<Members> {
     api.close();
     bookingClient.close();
     search.dispose();
-    searchFocus.dispose();
+    if (widget.searchFocus == null) searchFocus.dispose();
     super.dispose();
   }
 

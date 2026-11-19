@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../services/demo_catalog.dart';
 import '../theme/app_theme.dart';
@@ -26,155 +27,186 @@ class Dashboard extends StatefulWidget {
 class _DashboardState extends State<Dashboard> {
   int selectedIndex = 0;
   final catalog = DemoCatalog();
+  final searchFocus = FocusNode();
+
+  @override
+  void dispose() {
+    searchFocus.dispose();
+    super.dispose();
+  }
+
+  void focusSearch() {
+    if (selectedIndex == 1 || selectedIndex == 2) searchFocus.requestFocus();
+  }
 
   void navigate(int index) => setState(() => selectedIndex = index);
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: SafeArea(
-      child: LayoutBuilder(
-        builder: (context, box) {
-          final expanded = box.maxWidth >= 1100;
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                width: expanded ? 244 : 80,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  border: Border(right: BorderSide(color: Color(0xFFE1E3EF))),
-                ),
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: expanded ? 14 : 8,
-                    vertical: 28,
+    body: CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyF, control: true):
+            focusSearch,
+        const SingleActivator(LogicalKeyboardKey.keyF, meta: true): focusSearch,
+      },
+      child: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, box) {
+            final expanded = box.maxWidth >= 1100;
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  width: expanded ? 244 : 80,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    border: Border(right: BorderSide(color: Color(0xFFE1E3EF))),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 30),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.chair_outlined,
-                              color: indigo,
-                              size: 32,
-                            ),
-                            if (expanded) ...[
-                              const SizedBox(width: 10),
-                              const Expanded(
-                                child: Text(
-                                  'CoWorkHub',
-                                  style: TextStyle(
-                                    fontSize: 21,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const Divider(),
-                      const SizedBox(height: 20),
-                      for (var index = 0; index < destinations.length; index++)
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: expanded ? 14 : 8,
+                      vertical: 28,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Semantics(
-                            selected: selectedIndex == index,
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: selectedIndex == index
-                                    ? const Color(0xFFEDEBFD)
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border(
-                                  left: BorderSide(
-                                    color: selectedIndex == index
-                                        ? indigo
-                                        : Colors.transparent,
-                                    width: 3,
+                          padding: const EdgeInsets.only(bottom: 30),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.chair_outlined,
+                                color: indigo,
+                                size: 32,
+                              ),
+                              if (expanded) ...[
+                                const SizedBox(width: 10),
+                                const Expanded(
+                                  child: Text(
+                                    'CoWorkHub',
+                                    style: TextStyle(
+                                      fontSize: 21,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              child: expanded
-                                  ? TextButton(
-                                      style: TextButton.styleFrom(
-                                        alignment: Alignment.centerLeft,
-                                        foregroundColor: selectedIndex == index
+                              ],
+                            ],
+                          ),
+                        ),
+                        const Divider(),
+                        const SizedBox(height: 20),
+                        for (
+                          var index = 0;
+                          index < destinations.length;
+                          index++
+                        )
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Semantics(
+                              selected: selectedIndex == index,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: selectedIndex == index
+                                      ? const Color(0xFFEDEBFD)
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border(
+                                    left: BorderSide(
+                                      color: selectedIndex == index
+                                          ? indigo
+                                          : Colors.transparent,
+                                      width: 3,
+                                    ),
+                                  ),
+                                ),
+                                child: expanded
+                                    ? TextButton(
+                                        style: TextButton.styleFrom(
+                                          alignment: Alignment.centerLeft,
+                                          foregroundColor:
+                                              selectedIndex == index
+                                              ? indigo
+                                              : ink,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 14,
+                                            vertical: 20,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                        ),
+                                        onPressed: () => navigate(index),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              destinations[index].icon,
+                                              size: 23,
+                                            ),
+                                            const SizedBox(width: 14),
+                                            Expanded(
+                                              child: Text(
+                                                destinations[index].label,
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight:
+                                                      selectedIndex == index
+                                                      ? FontWeight.w700
+                                                      : FontWeight.w500,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    : IconButton(
+                                        tooltip: destinations[index].label,
+                                        color: selectedIndex == index
                                             ? indigo
                                             : ink,
                                         padding: const EdgeInsets.symmetric(
-                                          horizontal: 14,
-                                          vertical: 20,
+                                          vertical: 18,
                                         ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
+                                        onPressed: () => navigate(index),
+                                        icon: Icon(destinations[index].icon),
                                       ),
-                                      onPressed: () => navigate(index),
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            destinations[index].icon,
-                                            size: 23,
-                                          ),
-                                          const SizedBox(width: 14),
-                                          Expanded(
-                                            child: Text(
-                                              destinations[index].label,
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                fontWeight:
-                                                    selectedIndex == index
-                                                    ? FontWeight.w700
-                                                    : FontWeight.w500,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    )
-                                  : IconButton(
-                                      tooltip: destinations[index].label,
-                                      color: selectedIndex == index
-                                          ? indigo
-                                          : ink,
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 18,
-                                      ),
-                                      onPressed: () => navigate(index),
-                                      icon: Icon(destinations[index].icon),
-                                    ),
+                              ),
                             ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: FocusTraversalGroup(
-                  child: switch (selectedIndex) {
-                    0 => DashboardHome(navigate: navigate),
-                    1 => Resources(catalog, apiBase: widget.apiBase),
-                    2 => Members(catalog, apiBase: widget.apiBase),
-                    _ => BookingWorkspace(
-                      page: selectedIndex,
-                      catalog: catalog,
-                      navigate: navigate,
-                      apiBase: widget.apiBase,
-                    ),
-                  },
+                Expanded(
+                  child: FocusTraversalGroup(
+                    child: switch (selectedIndex) {
+                      0 => DashboardHome(navigate: navigate),
+                      1 => Resources(
+                        catalog,
+                        apiBase: widget.apiBase,
+                        searchFocus: searchFocus,
+                      ),
+                      2 => Members(
+                        catalog,
+                        apiBase: widget.apiBase,
+                        searchFocus: searchFocus,
+                      ),
+                      _ => BookingWorkspace(
+                        page: selectedIndex,
+                        catalog: catalog,
+                        navigate: navigate,
+                        apiBase: widget.apiBase,
+                      ),
+                    },
+                  ),
                 ),
-              ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
       ),
     ),
   );

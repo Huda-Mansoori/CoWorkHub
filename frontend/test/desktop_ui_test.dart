@@ -210,4 +210,71 @@ void main() {
       await tapVisible(tester, find.text('Cancel'));
     },
   );
+  testWidgets('Search shortcut works while sidebar navigation has focus', (
+    tester,
+  ) async {
+    await setSize(tester, const Size(1440, 900));
+    await tester.pumpWidget(const MyApp(apiBase: ''));
+    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('Members').first);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(find.byType(TextField).first)
+          .focusNode!
+          .hasFocus,
+      isTrue,
+    );
+  });
+
+  testWidgets('Failed resource loading provides an error message and Retry', (
+    tester,
+  ) async {
+    await setSize(tester, const Size(1000, 800));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAppTheme(),
+        home: Scaffold(
+          body: Resources(DemoCatalog(), apiBase: 'http://backend.invalid/api'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Could not load resources.'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+    await tapVisible(tester, find.text('Retry'));
+    expect(find.text('Could not load resources.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'Editing a booking preserves its member and updates the reservation',
+    (tester) async {
+      await setSize(tester, const Size(1440, 900));
+      await tester.pumpWidget(const MyApp(apiBase: ''));
+      await tester.pumpAndSettle();
+      await tapVisible(tester, find.text('New Booking'));
+      await tapVisible(tester, find.byType(DropdownButtonFormField<int>).first);
+      await tapVisible(tester, find.text('Dana Ali').last);
+      await tapVisible(tester, find.byType(DropdownButtonFormField<int>).last);
+      await tapVisible(tester, find.text('Meeting Room A').last);
+      await tapVisible(tester, find.text('Save booking'));
+      await tapVisible(tester, find.text('Edit').first);
+      expect(
+        tester
+            .widget<DropdownButtonFormField<int>>(
+              find.byType(DropdownButtonFormField<int>).first,
+            )
+            .onChanged,
+        isNull,
+      );
+      await tester.enterText(find.byType(TextField).first, '3');
+      await tapVisible(tester, find.text('Save booking'));
+      expect(find.text('Confirmed'), findsOneWidget);
+      expect(find.text('3'), findsOneWidget);
+    },
+  );
 }
