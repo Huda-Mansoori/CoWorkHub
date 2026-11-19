@@ -1,33 +1,34 @@
-import 'package:flutter/material.dart';
+import 'dart:math' as math;
 
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../models/booking.dart';
 import '../services/demo_catalog.dart';
 import '../services/resource_api.dart';
+import '../widgets/app_ui.dart';
+import '../widgets/resource_card.dart';
 
 class Resources extends StatefulWidget {
   final DemoCatalog catalog;
-
-  const Resources(this.catalog, {super.key});
-
+  final String? apiBase;
+  final FocusNode? searchFocus;
+  const Resources(this.catalog, {super.key, this.apiBase, this.searchFocus});
   @override
   State<Resources> createState() => _ResourcesState();
 }
 
 class _ResourcesState extends State<Resources> {
-  // 1. DATA AND FILTER VALUES
-  final ResourceApi resourceApi = ResourceApi();
-
-  List<Map<String, dynamic>> resources = [];
-
-  bool isLoading = true;
-  String? errorMessage;
-
-  String searchText = '';
-  String selectedType = 'All';
-  String selectedCapacity = 'Any';
-  String selectedLocation = 'All Locations';
-  String selectedPrice = 'Any Price';
-
-  // 2. LOAD RESOURCES FROM BACKEND
+  late final ResourceApi api = ResourceApi(base: widget.apiBase);
+  final search = TextEditingController();
+  late final searchFocus = widget.searchFocus ?? FocusNode();
+  List<Json> resources = [];
+  String type = 'All', location = 'All locations';
+  int? capacity;
+  double? price;
+  bool loading = true, deleting = false;
+  String? error;
+  bool get demo => (widget.apiBase ?? defaultApiBase).isEmpty;
   @override
   void initState() {
     super.initState();
@@ -36,631 +37,574 @@ class _ResourcesState extends State<Resources> {
 
   @override
   void dispose() {
-    resourceApi.close();
+    api.close();
+    search.dispose();
+    if (widget.searchFocus == null) searchFocus.dispose();
     super.dispose();
   }
 
   Future<void> loadResources() async {
     setState(() {
-      isLoading = true;
-      errorMessage = null;
+      loading = true;
+      error = null;
     });
-
     try {
-      final data = await resourceApi.getResources();
-
+      final data = demo
+          ? widget.catalog.resources
+          : (await api.getResources()).map((item) => Json.from(item)).toList();
       if (!mounted) return;
-
       setState(() {
-        resources = data.map((item) {
-          return Map<String, dynamic>.from(item);
-        }).toList();
-
-        isLoading = false;
+        resources = data;
+        if (!resources.any((r) => r['location'] == location)) {
+          location = 'All locations';
+        }
+        loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        errorMessage = e.toString();
-        isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          loading = false;
+          error = displayError(e);
+        });
+      }
     }
   }
 
-  // 3. SEARCH AND FILTER LOGIC
-  List<Map<String, dynamic>> get visibleResources {
-    return resources.where((resource) {
-      String type = resource.containsKey('projector') ? 'Meeting Room' : 'Desk';
+  List<Json> get visible => resources.where((r) {
+    final desk = r['deskType'] != null;
+    return r['name'].toString().toLowerCase().contains(
+          search.text.trim().toLowerCase(),
+        ) &&
+        (type == 'All' || (desk ? 'Desk' : 'Meeting Room') == type) &&
+        (location == 'All locations' || r['location'] == location) &&
+        (capacity == null ||
+            (desk ? 1 : (r['capacity'] as num).toInt()) >= capacity!) &&
+        (price == null || (r['hourlyRate'] as num).toDouble() <= price!);
+  }).toList();
 
-      bool nameMatches = resource['name'].toString().toLowerCase().contains(
-        searchText.toLowerCase(),
-      );
-
-      bool typeMatches = selectedType == 'All' || selectedType == type;
-
-      bool capacityMatches =
-          selectedCapacity == 'Any' ||
-          (resource['capacity'] as num).toInt() >= int.parse(selectedCapacity);
-
-      bool locationMatches =
-          selectedLocation == 'All Locations' ||
-          resource['location'].toString().toLowerCase() ==
-              selectedLocation.toLowerCase();
-
-      bool priceMatches =
-          selectedPrice == 'Any Price' ||
-          (resource['hourlyRate'] as num).toDouble() <=
-              double.parse(selectedPrice);
-
-      return nameMatches &&
-          typeMatches &&
-          capacityMatches &&
-          locationMatches &&
-          priceMatches;
-    }).toList();
+  Future<void> edit([Json? existing]) async {
+    final saved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => ResourceEditor(
+        existing: existing,
+        onSave: (data) async {
+          if (demo) {
+            if (existing == null) {
+              widget.catalog.resources.add({
+                ...data,
+                'id': widget.catalog.nextResourceId++,
+              });
+            } else {
+              existing.addAll(data);
+            }
+          } else if (data['deskType'] != null) {
+            if (existing == null) {
+              await api.addDesk(data);
+            } else {
+              await api.updateDesk(existing['id'], data);
+            }
+          } else {
+            if (existing == null) {
+              await api.addMeetingRoom(data);
+            } else {
+              await api.updateMeetingRoom(existing['id'], data);
+            }
+          }
+        },
+      ),
+    );
+    if (saved != true || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          existing == null
+              ? 'Resource added successfully'
+              : 'Resource updated successfully',
+        ),
+      ),
+    );
+    await loadResources();
   }
 
-  // 4. MAIN SCREEN
+  Future<void> remove(Json resource) async {
+    if (deleting) return;
+    final yes = await confirmAction(
+      context,
+      title: 'Delete resource?',
+      message:
+          'Delete "${resource['name']}"? Resources with booking history cannot be deleted.',
+      confirmLabel: 'Delete',
+    );
+    if (!yes || !mounted) return;
+    setState(() => deleting = true);
+    try {
+      if (demo) {
+        if (widget.catalog.bookings.any(
+          (b) => b.slot.resourceId == resource['id'],
+        )) {
+          throw Exception(
+            'This resource has booking history. Set it to Out of service instead.',
+          );
+        }
+        widget.catalog.resources.remove(resource);
+      } else {
+        await api.deleteResource(resource['id']);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Resource deleted successfully')),
+      );
+      await loadResources();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(displayError(e))));
+      }
+    } finally {
+      if (mounted) setState(() => deleting = false);
+    }
+  }
+
+  Widget filter<T>(
+    String label,
+    T? value,
+    List<DropdownMenuItem<T>> items,
+    ValueChanged<T?> changed,
+  ) => DropdownButtonFormField<T>(
+    key: ValueKey((label, value)),
+    initialValue: value,
+    isExpanded: true,
+    decoration: InputDecoration(labelText: label),
+    items: items,
+    onChanged: loading ? null : (v) => setState(() => changed(v)),
+  );
+
   @override
-  Widget build(BuildContext context) {
-    List<Map<String, dynamic>> shown = visibleResources;
-
-    return Padding(
-      padding: EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 4.1 Page title
-          Text(
-            'Resources Management',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-
-          SizedBox(height: 20),
-
-          // 4.2 Search by name
-          TextField(
-            onChanged: (value) {
-              setState(() {
-                searchText = value;
-              });
-            },
-            decoration: InputDecoration(
-              hintText: 'Search resources by name',
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(),
-            ),
-          ),
-
-          SizedBox(height: 20),
-
-          // 4.3 Filters
-          Wrap(
-            spacing: 20,
-            runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              filterDropdown('Resource Type', selectedType, [
-                'All',
-                'Meeting Room',
-                'Desk',
-              ], (value) => setState(() => selectedType = value)),
-
-              filterDropdown('Minimum Capacity', selectedCapacity, [
-                'Any',
-                '1',
-                '2',
-                '5',
-                '10',
-              ], (value) => setState(() => selectedCapacity = value)),
-
-              filterDropdown('Location', selectedLocation, [
-                'All Locations',
-                'Floor 1',
-                'Floor 2',
-                'Floor 3',
-              ], (value) => setState(() => selectedLocation = value)),
-
-              filterDropdown('Maximum Price', selectedPrice, [
-                'Any Price',
-                '50',
-                '100',
-                '200',
-                '500',
-              ], (value) => setState(() => selectedPrice = value)),
-            ],
-          ),
-
-          SizedBox(height: 20),
-
-          // 4.4 Add Resource button
-          ElevatedButton.icon(
-            onPressed: () => openResourceForm(),
-            icon: Icon(Icons.add),
-            label: Text('Add Resource'),
-          ),
-
-          SizedBox(height: 20),
-
-          // 4.5 Available Resources heading
-          Text(
-            'Available Resources',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-
-          SizedBox(height: 10),
-
-          // 4.6 Resource cards
-          Expanded(
-            child: isLoading
-                ? Center(child: CircularProgressIndicator())
-                : errorMessage != null
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
+  Widget build(BuildContext context) => CallbackShortcuts(
+    bindings: {
+      const SingleActivator(LogicalKeyboardKey.keyF, control: true):
+          searchFocus.requestFocus,
+      const SingleActivator(LogicalKeyboardKey.keyF, meta: true):
+          searchFocus.requestFocus,
+    },
+    child: LayoutBuilder(
+      builder: (context, box) {
+        final pad = box.maxWidth < 600 ? 20.0 : 32.0;
+        final width = box.maxWidth - pad * 2;
+        final columns = math.max(1, (width / 310).floor());
+        final rows = visible;
+        final places =
+            resources.map((r) => r['location'].toString()).toSet().toList()
+              ..sort();
+        return CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(pad, pad, pad, 20),
+              sliver: SliverList.list(
+                children: [
+                  PageHeading(
+                    'Resources',
+                    action: FilledButton.icon(
+                      onPressed: loading || deleting ? null : () => edit(),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add resource'),
+                    ),
+                  ),
+                  if (deleting)
+                    const LinearProgressIndicator(semanticsLabel: 'Deleting'),
+                  const SizedBox(height: 28),
+                  TextField(
+                    controller: search,
+                    autofocus: true,
+                    focusNode: searchFocus,
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      hintText: 'Search resources by name',
+                      prefixIcon: Icon(Icons.search),
+                      labelText: 'Search resources',
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Panel(
+                    padding: const EdgeInsets.all(16),
+                    child: Wrap(
+                      spacing: 16,
+                      runSpacing: 18,
                       children: [
-                        Text('Could not load resources'),
-                        SizedBox(height: 10),
-                        Text(errorMessage!),
-                        ElevatedButton(
-                          onPressed: loadResources,
-                          child: Text('Retry'),
+                        SizedBox(
+                          width: math.min(200, width - 32),
+                          child: filter<String>(
+                            'Resource type',
+                            type,
+                            ['All', 'Meeting Room', 'Desk']
+                                .map(
+                                  (s) => DropdownMenuItem(
+                                    value: s,
+                                    child: Text(s),
+                                  ),
+                                )
+                                .toList(),
+                            (v) => type = v!,
+                          ),
+                        ),
+                        SizedBox(
+                          width: math.min(180, width - 32),
+                          child: filter<int>(
+                            'Minimum capacity',
+                            capacity ?? 0,
+                            [0, 1, 2, 5, 10]
+                                .map(
+                                  (n) => DropdownMenuItem(
+                                    value: n,
+                                    child: Text(n == 0 ? 'Any' : '$n'),
+                                  ),
+                                )
+                                .toList(),
+                            (v) => capacity = v == 0 ? null : v,
+                          ),
+                        ),
+                        SizedBox(
+                          width: math.min(200, width - 32),
+                          child: filter<String>(
+                            'Location',
+                            location,
+                            ['All locations', ...places]
+                                .map(
+                                  (s) => DropdownMenuItem(
+                                    value: s,
+                                    child: Text(
+                                      s,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                            (v) => location = v!,
+                          ),
+                        ),
+                        SizedBox(
+                          width: math.min(180, width - 32),
+                          child: filter<double>(
+                            'Maximum price',
+                            price ?? 0,
+                            [0.0, 50.0, 100.0, 200.0, 500.0]
+                                .map(
+                                  (n) => DropdownMenuItem(
+                                    value: n,
+                                    child: Text(
+                                      n == 0 ? 'Any price' : '${n.toInt()} QAR',
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                            (v) => price = v == 0 ? null : v,
+                          ),
                         ),
                       ],
                     ),
-                  )
-                : shown.isEmpty
-                ? Center(child: Text('No resources available'))
-                : ListView.builder(
-                    itemCount: shown.length,
-                    itemBuilder: (context, index) {
-                      return resourceCard(shown[index]);
-                    },
                   ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // 5. FILTER DROPDOWN
-  Widget filterDropdown(
-    String label,
-    String selected,
-    List<String> options,
-    void Function(String) onSelect,
-  ) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text('$label: '),
-
-        SizedBox(width: 8),
-
-        DropdownButton<String>(
-          value: selected,
-          items: options.map((option) {
-            return DropdownMenuItem(value: option, child: Text(option));
-          }).toList(),
-          onChanged: (value) {
-            if (value != null) {
-              onSelect(value);
-            }
-          },
-        ),
-      ],
-    );
-  }
-
-  // 6. RESOURCE CARD
-  Widget resourceCard(Map<String, dynamic> resource) {
-    return Card(
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 6.1 Resource details
-            Text(
-              resource['name'].toString(),
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-
-            SizedBox(height: 10),
-
-            Text('Location: ${resource['location']}'),
-            Text('Capacity: ${resource['capacity']}'),
-            Text('Hourly Rate: ${resource['hourlyRate']} QAR'),
-            Text('Status: ${resource['status']}'),
-
-            // 6.2 Meeting Room details
-            if (resource.containsKey('projector'))
-              Text(
-                'Projector: ${resource['projector'] == true ? 'Yes' : 'No'}',
+                  if (!loading && error == null)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: loadResources,
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: const Text('Refresh'),
+                      ),
+                    ),
+                ],
               ),
-
-            if (resource.containsKey('videoConference'))
-              Text(
-                'Video Conference: ${resource['videoConference'] == true ? 'Yes' : 'No'}',
+            ),
+            if (loading)
+              const SliverToBoxAdapter(
+                child: ListState(loading: true, title: 'Loading resources...'),
+              )
+            else if (error != null)
+              SliverToBoxAdapter(
+                child: ListState(
+                  title: 'Could not load resources.',
+                  detail: error,
+                  icon: Icons.error_outline,
+                  action: loadResources,
+                ),
+              )
+            else if (rows.isEmpty)
+              SliverToBoxAdapter(
+                child: ListState(
+                  title: resources.isEmpty
+                      ? 'No resources yet'
+                      : 'No matching resources',
+                  detail: resources.isEmpty
+                      ? 'Add your first resource to get started.'
+                      : 'Try changing your search or filters.',
+                  actionLabel: resources.isEmpty
+                      ? 'Add resource'
+                      : 'Clear filters',
+                  action: resources.isEmpty
+                      ? () => edit()
+                      : () => setState(() {
+                          search.clear();
+                          type = 'All';
+                          capacity = null;
+                          price = null;
+                          location = 'All locations';
+                        }),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(pad, 0, pad, pad),
+                sliver: SliverList.builder(
+                  itemCount: (rows.length / columns).ceil(),
+                  itemBuilder: (context, row) => Padding(
+                    padding: const EdgeInsets.only(bottom: 20),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (var col = 0; col < columns; col++) ...[
+                          if (col > 0) const SizedBox(width: 20),
+                          Expanded(
+                            child: row * columns + col < rows.length
+                                ? ResourceCard(
+                                    resource: Resource.fromJson(
+                                      rows[row * columns + col],
+                                    ),
+                                    details: rows[row * columns + col],
+                                    disabled: deleting,
+                                    onEdit: () =>
+                                        edit(rows[row * columns + col]),
+                                    onDelete: () =>
+                                        remove(rows[row * columns + col]),
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
               ),
-
-            // 6.3 Desk details
-            if (resource.containsKey('deskType'))
-              Text('Desk Type: ${resource['deskType']}'),
-
-            SizedBox(height: 10),
-
-            // 6.4 Edit and Delete buttons
-            Wrap(
-              spacing: 10,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: () {
-                    openResourceForm(existing: resource);
-                  },
-                  icon: Icon(Icons.edit),
-                  label: Text('Edit'),
-                ),
-
-                ElevatedButton.icon(
-                  onPressed: () {
-                    deleteResource(resource);
-                  },
-                  icon: Icon(Icons.delete),
-                  label: Text('Delete'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // 7. DELETE RESOURCE
-  Future<void> deleteResource(Map<String, dynamic> resource) async {
-    // 7.1 Ask user before deleting
-    bool? confirm = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text('Delete Resource'),
-          content: Text('Are you sure you want to delete ${resource['name']}?'),
-          actions: [
-            // Cancel button
-            TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext, false);
-              },
-              child: Text('Cancel'),
-            ),
-
-            // Confirm delete button
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(dialogContext, true);
-              },
-              child: Text('Delete'),
-            ),
           ],
         );
       },
-    );
+    ),
+  );
+}
 
-    // Stop if user cancels
-    if (confirm != true || !mounted) return;
+class ResourceEditor extends StatefulWidget {
+  final Json? existing;
+  final Future<void> Function(Json) onSave;
+  const ResourceEditor({super.key, this.existing, required this.onSave});
+  @override
+  State<ResourceEditor> createState() => _ResourceEditorState();
+}
 
-    // 7.2 Delete from backend
+class _ResourceEditorState extends State<ResourceEditor> {
+  final formKey = GlobalKey<FormState>();
+  late final TextEditingController name, location, capacity, rate;
+  late String type, status, deskType;
+  late bool projector, video;
+  bool saving = false;
+  String? error;
+  bool get editing => widget.existing != null;
+  @override
+  void initState() {
+    super.initState();
+    final data = widget.existing;
+    name = TextEditingController(text: data?['name'] ?? '');
+    location = TextEditingController(text: data?['location'] ?? '');
+    capacity = TextEditingController(text: data?['capacity']?.toString() ?? '');
+    rate = TextEditingController(text: data?['hourlyRate']?.toString() ?? '');
+    type = data?['deskType'] != null ? 'Desk' : 'Meeting Room';
+    status = data?['status'] ?? 'ACTIVE';
+    deskType = data?['deskType'] ?? 'Regular Desk';
+    projector = data?['projector'] ?? false;
+    video = data?['videoConference'] ?? false;
+    if (type == 'Desk') capacity.text = '1';
+  }
+
+  @override
+  void dispose() {
+    for (final c in [name, location, capacity, rate]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> submit() async {
+    if (saving || !formKey.currentState!.validate()) return;
+    setState(() {
+      saving = true;
+      error = null;
+    });
+    final data = <String, dynamic>{
+      'name': name.text.trim(),
+      'location': location.text.trim(),
+      'capacity': type == 'Desk' ? 1 : int.parse(capacity.text.trim()),
+      'hourlyRate': double.parse(rate.text.trim()),
+      'status': status,
+      if (type == 'Desk')
+        'deskType': deskType
+      else ...{
+        'projector': projector,
+        'videoConference': video,
+      },
+    };
     try {
-      await resourceApi.deleteResource((resource['id'] as num).toInt());
-
-      if (!mounted) return;
-
-      await loadResources();
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Resource deleted successfully')));
+      await widget.onSave(data);
+      if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not delete resource: $e')));
+      if (mounted) {
+        setState(() {
+          error = displayError(e);
+          saving = false;
+        });
+      }
     }
   }
 
-  // 8. ADD AND EDIT RESOURCE FORM
-  Future<void> openResourceForm({Map<String, dynamic>? existing}) async {
-    // 8.1 Get existing values
-    bool editing = existing != null;
-
-    TextEditingController name = TextEditingController(
-      text: existing?['name'] ?? '',
-    );
-
-    TextEditingController location = TextEditingController(
-      text: existing?['location'] ?? '',
-    );
-
-    TextEditingController capacity = TextEditingController(
-      text: existing?['capacity']?.toString() ?? '',
-    );
-
-    TextEditingController rate = TextEditingController(
-      text: existing?['hourlyRate']?.toString() ?? '',
-    );
-
-    // 8.2 Resource type and extra options
-    String type = editing && existing.containsKey('deskType')
-        ? 'Desk'
-        : 'Meeting Room';
-
-    String status = existing?['status'] ?? 'ACTIVE';
-    bool projector = existing?['projector'] ?? false;
-    bool videoConference = existing?['videoConference'] ?? false;
-    String deskType = existing?['deskType'] ?? 'Regular Desk';
-
-    // 8.3 Open Add/Edit popup
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (dialogContext, updateDialog) {
-            return AlertDialog(
-              title: Text(editing ? 'Edit Resource' : 'Add New Resource'),
-
-              content: SingleChildScrollView(
-                child: SizedBox(
-                  width: 360,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // 8.4 Resource name
-                      inputField('Resource Name', name),
-
-                      SizedBox(height: 15),
-
-                      // 8.5 Resource type
-                      DropdownButtonFormField<String>(
-                        initialValue: type,
-                        decoration: InputDecoration(
-                          labelText: 'Resource Type',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: ['Meeting Room', 'Desk'].map((value) {
-                          return DropdownMenuItem(
-                            value: value,
-                            child: Text(value),
-                          );
-                        }).toList(),
-                        onChanged: editing
-                            ? null
-                            : (value) {
-                                if (value != null) {
-                                  updateDialog(() {
-                                    type = value;
-                                  });
-                                }
-                              },
-                      ),
-
-                      SizedBox(height: 15),
-
-                      // 8.6 Location
-                      inputField('Location', location),
-
-                      SizedBox(height: 15),
-
-                      // 8.7 Capacity
-                      inputField('Capacity', capacity, numeric: true),
-
-                      SizedBox(height: 15),
-
-                      // 8.8 Hourly rate
-                      inputField('Hourly Rate (QAR)', rate, numeric: true),
-
-                      SizedBox(height: 10),
-
-                      DropdownButtonFormField<String>(
-                        initialValue: status,
-                        decoration: const InputDecoration(
-                          labelText: 'Status',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: ['ACTIVE', 'OUT_OF_SERVICE']
-                            .map(
-                              (value) => DropdownMenuItem(
-                                value: value,
-                                child: Text(value),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) =>
-                            updateDialog(() => status = value!),
-                      ),
-                      const SizedBox(height: 15),
-
-                      // 8.9 Meeting Room options
-                      if (type == 'Meeting Room') ...[
-                        CheckboxListTile(
-                          title: Text('Projector'),
-                          value: projector,
-                          onChanged: (value) {
-                            updateDialog(() {
-                              projector = value ?? false;
-                            });
-                          },
-                        ),
-
-                        CheckboxListTile(
-                          title: Text('Video Conference'),
-                          value: videoConference,
-                          onChanged: (value) {
-                            updateDialog(() {
-                              videoConference = value ?? false;
-                            });
-                          },
-                        ),
-                      ],
-
-                      // 8.10 Desk options
-                      if (type == 'Desk')
-                        DropdownButtonFormField<String>(
-                          initialValue: deskType,
-                          decoration: InputDecoration(
-                            labelText: 'Desk Type',
-                            border: OutlineInputBorder(),
-                          ),
-                          items:
-                              [
-                                'Regular Desk',
-                                'Standing Desk',
-                                'Private Desk',
-                              ].map((value) {
-                                return DropdownMenuItem(
-                                  value: value,
-                                  child: Text(value),
-                                );
-                              }).toList(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              updateDialog(() {
-                                deskType = value;
-                              });
-                            }
-                          },
-                        ),
-                    ],
-                  ),
+  String? requiredText(String? value) => value == null || value.trim().isEmpty
+      ? 'This field is required.'
+      : value.trim().length > 150
+      ? 'Use 150 characters or fewer.'
+      : null;
+  @override
+  Widget build(BuildContext context) => EditorDialog(
+    title: editing ? 'Edit resource' : 'Add resource',
+    saving: saving,
+    error: error,
+    onSave: submit,
+    onCancel: () => Navigator.pop(context, false),
+    child: Form(
+      key: formKey,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FieldGrid(
+            children: [
+              TextFormField(
+                controller: name,
+                onFieldSubmitted: (_) => submit(),
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Resource name *',
+                  hintText: 'e.g. Meeting Room A',
                 ),
+                validator: requiredText,
               ),
-
-              actions: [
-                // 8.11 Cancel button
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(dialogContext);
-                  },
-                  child: Text('Cancel'),
+              DropdownButtonFormField<String>(
+                initialValue: type,
+                decoration: const InputDecoration(labelText: 'Resource type'),
+                items: ['Meeting Room', 'Desk']
+                    .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                    .toList(),
+                onChanged: editing || saving
+                    ? null
+                    : (v) => setState(() {
+                        type = v!;
+                        if (type == 'Desk') capacity.text = '1';
+                      }),
+              ),
+              TextFormField(
+                controller: location,
+                onFieldSubmitted: (_) => submit(),
+                decoration: const InputDecoration(
+                  labelText: 'Location *',
+                  hintText: 'e.g. Floor 1',
                 ),
-
-                // 8.12 Save button
-                ElevatedButton(
-                  onPressed: () async {
-                    // 8.12.1 Read entered values
-                    String newName = name.text.trim();
-                    String newLocation = location.text.trim();
-                    int? newCapacity = int.tryParse(capacity.text);
-                    double? newRate = double.tryParse(rate.text);
-
-                    // 8.12.2 Check entered values
-                    if (newName.isEmpty ||
-                        newLocation.isEmpty ||
-                        newCapacity == null ||
-                        newCapacity <= 0 ||
-                        newRate == null ||
-                        !newRate.isFinite ||
-                        newRate <= 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Please enter valid information'),
-                        ),
-                      );
-                      return;
-                    }
-
-                    // 8.12.3 Prepare resource data
-                    Map<String, dynamic> data = {
-                      'name': newName,
-                      'location': newLocation,
-                      'capacity': type == 'Desk' ? 1 : newCapacity,
-                      'hourlyRate': newRate,
-                      'status': status,
-                    };
-
-                    if (type == 'Meeting Room') {
-                      data['projector'] = projector;
-                      data['videoConference'] = videoConference;
-                    } else {
-                      data['deskType'] = deskType;
-                    }
-
-                    // 8.12.4 Save to backend
-                    try {
-                      if (editing) {
-                        int id = (existing['id'] as num).toInt();
-
-                        if (type == 'Meeting Room') {
-                          await resourceApi.updateMeetingRoom(id, data);
-                        } else {
-                          await resourceApi.updateDesk(id, data);
-                        }
-                      } else {
-                        if (type == 'Meeting Room') {
-                          await resourceApi.addMeetingRoom(data);
-                        } else {
-                          await resourceApi.addDesk(data);
-                        }
-                      }
-
-                      if (!mounted || !dialogContext.mounted) return;
-
-                      Navigator.pop(dialogContext);
-
-                      await loadResources();
-
-                      if (!mounted) return;
-
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            editing
-                                ? 'Resource updated successfully'
-                                : 'Resource added successfully',
-                          ),
-                        ),
-                      );
-                    } catch (e) {
-                      if (!mounted) return;
-
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Could not save resource: $e')),
-                      );
-                    }
-                  },
-                  child: Text('Save'),
+                validator: requiredText,
+              ),
+              TextFormField(
+                controller: capacity,
+                onFieldSubmitted: (_) => submit(),
+                readOnly: type == 'Desk',
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Capacity *',
+                  helperText: type == 'Desk'
+                      ? 'Desks accommodate one attendee.'
+                      : null,
                 ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    // 8.13 Clean up controllers
-    name.dispose();
-    location.dispose();
-    capacity.dispose();
-    rate.dispose();
-  }
-
-  // 9. REUSABLE TEXT FIELD
-  Widget inputField(
-    String label,
-    TextEditingController controller, {
-    bool numeric = false,
-  }) {
-    return TextField(
-      controller: controller,
-      keyboardType: numeric ? TextInputType.number : TextInputType.text,
-      decoration: InputDecoration(
-        labelText: label,
-        border: OutlineInputBorder(),
+                validator: (v) => (int.tryParse(v ?? '') ?? 0) < 1
+                    ? 'Enter a capacity of at least 1.'
+                    : null,
+              ),
+              TextFormField(
+                controller: rate,
+                onFieldSubmitted: (_) => submit(),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'Hourly rate (QAR) *',
+                  hintText: 'e.g. 80.00',
+                ),
+                validator: (v) {
+                  final n = double.tryParse(v?.trim() ?? '');
+                  if (n == null || !n.isFinite || n <= 0 || n > 99999999.99) {
+                    return 'Enter a rate between 0.01 and 99999999.99 QAR.';
+                  }
+                  if (!RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(v!.trim())) {
+                    return 'Use up to two decimal places, e.g. 80.00.';
+                  }
+                  return null;
+                },
+              ),
+              DropdownButtonFormField<String>(
+                initialValue: status,
+                decoration: const InputDecoration(labelText: 'Status'),
+                items: const [
+                  DropdownMenuItem(value: 'ACTIVE', child: Text('Active')),
+                  DropdownMenuItem(
+                    value: 'OUT_OF_SERVICE',
+                    child: Text('Out of service'),
+                  ),
+                ],
+                onChanged: saving ? null : (v) => setState(() => status = v!),
+              ),
+              if (type == 'Desk')
+                DropdownButtonFormField<String>(
+                  initialValue: deskType,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Desk type'),
+                  items:
+                      {
+                            ...[
+                              'Regular Desk',
+                              'Standing Desk',
+                              'Private Desk',
+                            ],
+                            deskType,
+                          }
+                          .map(
+                            (s) => DropdownMenuItem(value: s, child: Text(s)),
+                          )
+                          .toList(),
+                  onChanged: saving
+                      ? null
+                      : (v) => setState(() => deskType = v!),
+                ),
+            ],
+          ),
+          if (type != 'Desk') ...[
+            const SizedBox(height: 18),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Projector'),
+              value: projector,
+              onChanged: saving ? null : (v) => setState(() => projector = v!),
+            ),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Video conference'),
+              value: video,
+              onChanged: saving ? null : (v) => setState(() => video = v!),
+            ),
+          ],
+        ],
       ),
-    );
-  }
+    ),
+  );
 }

@@ -51,10 +51,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Bookings for Dana Ali'), findsOneWidget);
     expect(find.text('Meeting Room A'), findsNWidgets(2));
-    expect(find.text('CONFIRMED'), findsOneWidget);
-    expect(find.text('CANCELLED'), findsOneWidget);
+    expect(find.text('Confirmed'), findsOneWidget);
+    expect(find.text('Cancelled'), findsOneWidget);
     expect(find.text('160.00'), findsNWidgets(2));
-    expect(find.text('2026-11-18 09:00\n2026-11-18 11:00'), findsNWidgets(2));
+    expect(find.text('18 Nov 2026 09:00\n18 Nov 2026 11:00'), findsNWidgets(2));
   });
 
   testWidgets('History shows loading then empty state', (tester) async {
