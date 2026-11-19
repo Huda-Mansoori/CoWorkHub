@@ -1,80 +1,82 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/booking.dart';
 import '../services/booking_api.dart';
+import '../widgets/app_ui.dart';
 
 class MemberBookingsDialog extends StatefulWidget {
   final int memberId;
   final String memberName;
   final BookingApi api;
-
+  final Future<List<Booking>> Function()? loader;
   const MemberBookingsDialog({
     super.key,
     required this.memberId,
     required this.memberName,
     required this.api,
+    this.loader,
   });
-
   @override
   State<MemberBookingsDialog> createState() => _MemberBookingsDialogState();
 }
 
 class _MemberBookingsDialogState extends State<MemberBookingsDialog> {
   late Future<List<Booking>> bookings;
-
+  Future<List<Booking>> load() =>
+      widget.loader?.call() ?? widget.api.memberBookings(widget.memberId);
+  void refresh() => setState(() {
+    bookings = load();
+  });
   @override
   void initState() {
     super.initState();
-    bookings = widget.api.memberBookings(widget.memberId);
+    bookings = load();
   }
 
-  String date(DateTime value) =>
-      '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')} '
-      '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
-
   @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
+  Widget build(BuildContext context) => CallbackShortcuts(
+    bindings: {
+      const SingleActivator(LogicalKeyboardKey.escape): () =>
+          Navigator.pop(context),
+    },
+    child: AlertDialog(
+      insetPadding: const EdgeInsets.all(20),
       title: Text('Bookings for ${widget.memberName}'),
       content: SizedBox(
-        width: 900,
+        width: 950,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 480),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * .65,
+          ),
           child: FutureBuilder<List<Booking>>(
             future: bookings,
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
-                return const Center(child: CircularProgressIndicator());
+                return const ListState(
+                  loading: true,
+                  title: 'Loading booking history...',
+                );
               }
               if (snapshot.hasError) {
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Could not load booking history.'),
-                    const SizedBox(height: 8),
-                    Text(
-                      snapshot.error.toString().replaceFirst('Exception: ', ''),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton(
-                      onPressed: () => setState(() {
-                        bookings = widget.api.memberBookings(widget.memberId);
-                      }),
-                      child: const Text('Retry'),
-                    ),
-                  ],
+                return ListState(
+                  title: 'Could not load booking history.',
+                  detail: displayError(snapshot.error),
+                  icon: Icons.error_outline,
+                  action: refresh,
                 );
               }
               final rows = snapshot.data!;
               if (rows.isEmpty) {
-                return const Text('No bookings for this member.');
+                return const ListState(
+                  title: 'No bookings for this member.',
+                  icon: Icons.calendar_today_outlined,
+                );
               }
               return SingleChildScrollView(
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: DataTable(
-                    columnSpacing: 24,
                     columns: const [
                       DataColumn(label: Text('Date and time')),
                       DataColumn(label: Text('Resource')),
@@ -88,7 +90,7 @@ class _MemberBookingsDialogState extends State<MemberBookingsDialog> {
                           cells: [
                             DataCell(
                               Text(
-                                '${date(booking.slot.start)}\n${date(booking.slot.end)}',
+                                '${dateTimeLabel(booking.slot.start)}\n${dateTimeLabel(booking.slot.end)}',
                               ),
                             ),
                             DataCell(
@@ -97,7 +99,7 @@ class _MemberBookingsDialogState extends State<MemberBookingsDialog> {
                                     'Resource #${booking.slot.resourceId}',
                               ),
                             ),
-                            DataCell(Text(booking.status)),
+                            DataCell(StatusBadge(booking.status)),
                             DataCell(Text(booking.cost.toStringAsFixed(2))),
                           ],
                         ),
@@ -110,11 +112,16 @@ class _MemberBookingsDialogState extends State<MemberBookingsDialog> {
         ),
       ),
       actions: [
-        TextButton(
+        TextButton.icon(
+          onPressed: refresh,
+          icon: const Icon(Icons.refresh, size: 18),
+          label: const Text('Refresh'),
+        ),
+        FilledButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('Close'),
         ),
       ],
-    );
-  }
+    ),
+  );
 }

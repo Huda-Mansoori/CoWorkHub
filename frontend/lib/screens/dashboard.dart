@@ -64,11 +64,13 @@ class _DashboardState extends State<Dashboard> {
                             ),
                             if (expanded) ...[
                               const SizedBox(width: 10),
-                              const Text(
-                                'CoWorkHub',
-                                style: TextStyle(
-                                  fontSize: 21,
-                                  fontWeight: FontWeight.w700,
+                              const Expanded(
+                                child: Text(
+                                  'CoWorkHub',
+                                  style: TextStyle(
+                                    fontSize: 21,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                               ),
                             ],
@@ -159,8 +161,8 @@ class _DashboardState extends State<Dashboard> {
                 child: FocusTraversalGroup(
                   child: switch (selectedIndex) {
                     0 => DashboardHome(navigate: navigate),
-                    1 => Resources(catalog),
-                    2 => Members(catalog),
+                    1 => Resources(catalog, apiBase: widget.apiBase),
+                    2 => Members(catalog, apiBase: widget.apiBase),
                     _ => BookingWorkspace(
                       page: selectedIndex,
                       catalog: catalog,

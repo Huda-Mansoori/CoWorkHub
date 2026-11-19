@@ -5,13 +5,17 @@ import 'booking_api.dart';
 
 class ResourceApi {
   final http.Client _client = http.Client();
-  late final BookingApi _api = BookingApi(
-    const String.fromEnvironment(
-      'COWORK_API_BASE',
-      defaultValue: 'http://localhost:8080/api',
-    ),
-    _client,
-  );
+  late final BookingApi _api;
+  ResourceApi({String? base}) {
+    _api = BookingApi(
+      base ??
+          const String.fromEnvironment(
+            'COWORK_API_BASE',
+            defaultValue: 'http://localhost:8080/api',
+          ),
+      _client,
+    );
+  }
 
   Future<List<dynamic>> getResources() async =>
       await _api.request('GET', 'resources') as List;
