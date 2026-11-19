@@ -210,9 +210,12 @@ class _ResourcesState extends State<Resources> {
                       label: const Text('Add resource'),
                     ),
                   ),
+                  if (deleting)
+                    const LinearProgressIndicator(semanticsLabel: 'Deleting'),
                   const SizedBox(height: 28),
                   TextField(
                     controller: search,
+                    autofocus: true,
                     focusNode: searchFocus,
                     onChanged: (_) => setState(() {}),
                     decoration: const InputDecoration(
@@ -482,6 +485,7 @@ class _ResourceEditorState extends State<ResourceEditor> {
             children: [
               TextFormField(
                 controller: name,
+                onFieldSubmitted: (_) => submit(),
                 autofocus: true,
                 decoration: const InputDecoration(
                   labelText: 'Resource name *',
@@ -504,6 +508,7 @@ class _ResourceEditorState extends State<ResourceEditor> {
               ),
               TextFormField(
                 controller: location,
+                onFieldSubmitted: (_) => submit(),
                 decoration: const InputDecoration(
                   labelText: 'Location *',
                   hintText: 'e.g. Floor 1',
@@ -512,6 +517,7 @@ class _ResourceEditorState extends State<ResourceEditor> {
               ),
               TextFormField(
                 controller: capacity,
+                onFieldSubmitted: (_) => submit(),
                 readOnly: type == 'Desk',
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
@@ -526,6 +532,7 @@ class _ResourceEditorState extends State<ResourceEditor> {
               ),
               TextFormField(
                 controller: rate,
+                onFieldSubmitted: (_) => submit(),
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),

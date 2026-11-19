@@ -250,9 +250,12 @@ class _MembersState extends State<Members> {
                       label: const Text('Add member'),
                     ),
                   ),
+                  if (deleting)
+                    const LinearProgressIndicator(semanticsLabel: 'Deleting'),
                   const SizedBox(height: 28),
                   TextField(
                     controller: search,
+                    autofocus: true,
                     focusNode: searchFocus,
                     onChanged: (_) => setState(() {}),
                     decoration: const InputDecoration(
@@ -475,6 +478,7 @@ class _MemberEditorState extends State<MemberEditor> {
         children: [
           TextFormField(
             controller: name,
+            onFieldSubmitted: (_) => submit(),
             autofocus: true,
             decoration: const InputDecoration(
               labelText: 'Member name *',
@@ -489,6 +493,7 @@ class _MemberEditorState extends State<MemberEditor> {
           const SizedBox(height: 22),
           TextFormField(
             controller: email,
+            onFieldSubmitted: (_) => submit(),
             keyboardType: TextInputType.emailAddress,
             decoration: const InputDecoration(
               labelText: 'Email *',
