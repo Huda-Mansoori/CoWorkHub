@@ -267,21 +267,17 @@ flutter devices
 Follow Flutter Doctor's instructions to install the desktop build tools
 for your operating system.
 
-## 9. Security and Repository Notes
-
--   Keep local credentials in `.env`; do not commit secrets.
--   `.env.example` should contain placeholders, not working passwords.
--   Do not delete the persistent database volume when stopping
-    containers unless the database contents are no longer needed.
--   Generated folders such as `backend/target/`, `frontend/build/`, and
-    `frontend/.dart_tool/` are build artifacts and should not be
-    included in the final source-code ZIP.
 
 ## Contributors
 
-CoWorkHub was developed as a team university project. Add or maintain
-the full names and contributions of all team members here before the
-final submission.
+CoWorkHub was developed as a group project under INFS4102 - Desktop Application Development. 
+
+Group members:
+- Huda M.
+- Amanda H.
+- Asma D. A.
+- Mera S.
+
 
 ------------------------------------------------------------------------
 
