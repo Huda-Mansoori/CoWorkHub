@@ -1,37 +1,33 @@
+// Members page: owns list state, filters and CRUD actions; display widgets receive callbacks.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 
-import '../models/booking.dart';
-import '../services/booking_api.dart';
-import '../services/demo_catalog.dart';
+import '../models/member.dart';
 import '../services/member_api.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_ui.dart';
+import 'member_editor_dialog.dart';
+import '../services/booking_api.dart';
 import 'member_bookings_dialog.dart';
 
 class Members extends StatefulWidget {
-  final DemoCatalog catalog;
-  final String? apiBase;
+  final MemberApi? api;
   final FocusNode? searchFocus;
-  const Members(this.catalog, {super.key, this.apiBase, this.searchFocus});
+  final BookingApi? bookingApi;
+  const Members({super.key, this.api, this.searchFocus, this.bookingApi});
   @override
   State<Members> createState() => _MembersState();
 }
 
 class _MembersState extends State<Members> {
-  late final MemberApi api = MemberApi(base: widget.apiBase);
-  final bookingClient = http.Client();
-  late final bookingApi = BookingApi(
-    widget.apiBase ?? defaultApiBase,
-    bookingClient,
-  );
+  late final MemberApi api = widget.api ?? MemberApi();
   final search = TextEditingController();
   late final searchFocus = widget.searchFocus ?? FocusNode();
-  List<Map<String, String>> members = [];
+  List<Member> members = [];
   bool loading = true, deleting = false;
   String? error;
-  bool get demo => (widget.apiBase ?? defaultApiBase).isEmpty;
+  late final BookingApi bookingApi = widget.bookingApi ?? BookingApi();
+
   @override
   void initState() {
     super.initState();
@@ -40,158 +36,107 @@ class _MembersState extends State<Members> {
 
   @override
   void dispose() {
-    api.close();
-    bookingClient.close();
+    if (widget.api == null) api.close();
+    if (widget.bookingApi == null) bookingApi.close();
     search.dispose();
     if (widget.searchFocus == null) searchFocus.dispose();
     super.dispose();
   }
 
+  // TRACE: Members -> MemberApi.fetchAll -> GET /api/members
+  // -> MemberController -> MemberService -> MemberRepository.findAll -> MySQL
+  // <- 200 JSON -> Member.fromJson -> setState -> list rebuilds.
   Future<void> loadMembers() async {
+    // setState schedules a rebuild using the updated loading/list/error values.
     setState(() {
       loading = true;
       error = null;
     });
     try {
-      final data = demo
-          ? widget.catalog.members
-          : (await api.getMembers())
-                .map(
-                  (m) => <String, String>{
-                    'id': m['id'].toString(),
-                    'name': m['fullName'].toString(),
-                    'email': m['email'].toString(),
-                  },
-                )
-                .toList();
-      if (mounted) {
-        setState(() {
-          members = data;
-          loading = false;
-        });
-      }
+      final data = await api.fetchAll();
+      // The page may have been removed while the HTTP request was running.
+      if (!mounted) return;
+      setState(() {
+        members = data;
+        loading = false;
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          loading = false;
-          error = displayError(e);
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        loading = false;
+        error = displayError(e);
+      });
     }
   }
 
-  Future<void> edit([Map<String, String>? existing]) async {
+  // TRACE: editor -> MemberApi.create/update -> POST/PUT /api/members
+  // -> MemberController -> MemberService -> MemberRepository.save -> MySQL
+  // <- 201/200 -> close editor -> loadMembers -> refreshed list.
+  Future<void> edit([Member? existing]) async {
     final saved = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (_) => MemberEditor(
         existing: existing,
-        onSave: (name, email) async {
-          if (demo) {
-            if (members.any(
-              (m) =>
-                  m['id'] != existing?['id'] &&
-                  m['email']!.toLowerCase() == email.toLowerCase(),
-            )) {
-              throw Exception(
-                'This email is already registered. Enter a different email address.',
-              );
-            }
-            if (existing == null) {
-              widget.catalog.members.add({
-                'id': (widget.catalog.nextMemberId++).toString(),
-                'name': name,
-                'email': email,
-              });
-            } else {
-              existing.addAll({'name': name, 'email': email});
-            }
-          } else if (existing == null) {
-            await api.addMember(name, email);
+        onSave: (draft) async {
+          if (existing == null) {
+            await api.create(draft);
           } else {
-            await api.updateMember(existing['id']!, name, email);
+            await api.update(existing.id, draft);
           }
         },
       ),
     );
     if (saved != true || !mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          existing == null
-              ? 'Member added successfully'
-              : 'Member updated successfully',
-        ),
-      ),
-    );
+    String message = 'Member added successfully';
+    if (existing != null) message = 'Member updated successfully';
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
     await loadMembers();
   }
 
-  Future<void> remove(Map<String, String> member) async {
+  // TRACE: Delete -> MemberApi.delete -> DELETE /api/members/{id}
+  // -> MemberController -> MemberService -> MemberRepository.delete -> MySQL
+  // <- 204 -> loadMembers; 409 booking-history protection is shown to the user.
+  Future<void> remove(Member member) async {
     if (deleting) return;
     final yes = await confirmAction(
       context,
       title: 'Delete member?',
       message:
-          'Delete "${member['name']}"? Members with booking history cannot be deleted.',
+          'Delete "${member.fullName}"? Members with booking history cannot be deleted.',
       confirmLabel: 'Delete',
     );
     if (!yes || !mounted) return;
     setState(() => deleting = true);
     try {
-      if (demo) {
-        if (widget.catalog.bookings.any(
-          (b) => b.slot.memberId.toString() == member['id'],
-        )) {
-          throw Exception(
-            'This member has booking history and cannot be deleted.',
-          );
-        }
-        widget.catalog.members.remove(member);
-      } else {
-        await api.deleteMember(member['id']!);
-      }
+      await api.delete(member.id);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Member deleted successfully')),
       );
       await loadMembers();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(displayError(e))));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(displayError(e))));
     } finally {
       if (mounted) setState(() => deleting = false);
     }
   }
 
-  void viewBookings(Map<String, String> member) => showDialog<void>(
-    context: context,
-    builder: (_) => MemberBookingsDialog(
-      memberId: int.parse(member['id']!),
-      memberName: member['name']!,
-      api: bookingApi,
-      loader: demo
-          ? () async => widget.catalog.bookings
-                .where((b) => b.slot.memberId.toString() == member['id'])
-                .map(
-                  (b) => Booking(
-                    b.id,
-                    b.slot,
-                    b.status,
-                    b.cost,
-                    resourceName: widget.catalog.resources
-                        .where((r) => r['id'] == b.slot.resourceId)
-                        .firstOrNull?['name'],
-                  ),
-                )
-                .toList()
-          : null,
-    ),
-  );
+  void viewBookings(Member member) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => MemberBookingsDialog(
+        memberId: member.id,
+        memberName: member.fullName,
+        api: bookingApi,
+      ),
+    );
+  }
 
-  Widget actions(Map<String, String> member) => Wrap(
+  Widget actions(Member member) => Wrap(
     spacing: 4,
     runSpacing: 8,
     crossAxisAlignment: WrapCrossAlignment.center,
@@ -232,7 +177,7 @@ class _MembersState extends State<Members> {
             MediaQuery.textScalerOf(context).scale(14) < 19;
         final shown = members
             .where(
-              (m) => m['name']!.toLowerCase().contains(
+              (m) => m.fullName.toLowerCase().contains(
                 search.text.trim().toLowerCase(),
               ),
             )
@@ -365,7 +310,7 @@ class _MembersState extends State<Members> {
                                       Expanded(
                                         flex: 2,
                                         child: Text(
-                                          member['name']!,
+                                          member.fullName,
                                           style: const TextStyle(
                                             color: indigo,
                                             fontWeight: FontWeight.w600,
@@ -374,7 +319,7 @@ class _MembersState extends State<Members> {
                                       ),
                                       Expanded(
                                         flex: 3,
-                                        child: Text(member['email']!),
+                                        child: Text(member.email),
                                       ),
                                       SizedBox(
                                         width: 290,
@@ -387,14 +332,14 @@ class _MembersState extends State<Members> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        member['name']!,
+                                        member.fullName,
                                         style: Theme.of(context)
                                             .textTheme
                                             .titleMedium,
                                       ),
                                       const SizedBox(height: 6),
                                       Text(
-                                        member['email']!,
+                                        member.email,
                                         style: const TextStyle(
                                           color: secondaryInk,
                                         ),
@@ -414,101 +359,6 @@ class _MembersState extends State<Members> {
           ],
         );
       },
-    ),
-  );
-}
-
-class MemberEditor extends StatefulWidget {
-  final Map<String, String>? existing;
-  final Future<void> Function(String name, String email) onSave;
-  const MemberEditor({super.key, this.existing, required this.onSave});
-  @override
-  State<MemberEditor> createState() => _MemberEditorState();
-}
-
-class _MemberEditorState extends State<MemberEditor> {
-  final formKey = GlobalKey<FormState>();
-  late final TextEditingController name, email;
-  bool saving = false;
-  String? error;
-  @override
-  void initState() {
-    super.initState();
-    name = TextEditingController(text: widget.existing?['name'] ?? '');
-    email = TextEditingController(text: widget.existing?['email'] ?? '');
-  }
-
-  @override
-  void dispose() {
-    name.dispose();
-    email.dispose();
-    super.dispose();
-  }
-
-  Future<void> submit() async {
-    if (saving || !formKey.currentState!.validate()) return;
-    setState(() {
-      saving = true;
-      error = null;
-    });
-    try {
-      await widget.onSave(name.text.trim(), email.text.trim());
-      if (mounted) Navigator.pop(context, true);
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          saving = false;
-          error = displayError(e);
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => EditorDialog(
-    title: widget.existing == null ? 'Add member' : 'Edit member',
-    saving: saving,
-    error: error,
-    onSave: submit,
-    onCancel: () => Navigator.pop(context, false),
-    child: Form(
-      key: formKey,
-      autovalidateMode: AutovalidateMode.onUserInteraction,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextFormField(
-            controller: name,
-            onFieldSubmitted: (_) => submit(),
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Member name *',
-              hintText: 'e.g. Dana Ali',
-            ),
-            validator: (v) => v == null || v.trim().isEmpty
-                ? 'Enter the member name.'
-                : v.trim().length > 150
-                ? 'Use 150 characters or fewer.'
-                : null,
-          ),
-          const SizedBox(height: 22),
-          TextFormField(
-            controller: email,
-            onFieldSubmitted: (_) => submit(),
-            keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(
-              labelText: 'Email *',
-              hintText: 'e.g. dana@example.com',
-            ),
-            validator: (v) =>
-                v == null ||
-                    v.trim().length > 150 ||
-                    !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(v.trim())
-                ? 'Enter a valid email address, e.g. dana@example.com.'
-                : null,
-          ),
-        ],
-      ),
     ),
   );
 }

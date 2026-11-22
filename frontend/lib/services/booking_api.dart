@@ -1,67 +1,99 @@
+// BookingApi: explicit HTTP methods and JSON mapping for bookings.
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
 import '../models/booking.dart';
+import 'api_config.dart';
+import 'http_error.dart';
 
 class BookingApi {
-  final String base;
   final http.Client client;
-  BookingApi(this.base, this.client);
+  final bool _ownsClient;
+  BookingApi({http.Client? client})
+    : client = client ?? http.Client(),
+      _ownsClient = client == null;
 
-  Future<dynamic> request(
-    String method,
-    String path, {
-    Json? body,
-    Map<String, String>? query,
-  }) async {
-    final uri = Uri.parse('${base.replaceFirst(RegExp(r'/$'), '')}/$path')
-        .replace(queryParameters: query);
-    final request = http.Request(method, uri);
-    if (body != null) {
-      request.headers['Content-Type'] = 'application/json';
-      request.body = jsonEncode(body);
-    }
-    final response = await client
-        .send(request)
-        .then(http.Response.fromStream)
-        .timeout(const Duration(seconds: 12));
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      String message = response.reasonPhrase ?? 'Request failed';
-      try {
-        final data = jsonDecode(response.body);
-        if (data is Map && data['message'] is String) message = data['message'];
-      } on FormatException {
-        if (response.body.trim().isNotEmpty) message = response.body.trim();
-      }
-      throw Exception('HTTP ${response.statusCode}: $message');
-    }
-    return response.body.trim().isEmpty ? null : jsonDecode(response.body);
+  // TRACE: page -> BookingApi.fetchAll -> GET /api/bookings
+  // -> BookingController.getAllBookings -> BookingService -> BookingRepository.findAll -> MySQL
+  // <- 200 JSON -> Booking.fromJson -> page setState -> list rebuilds.
+  Future<List<Booking>> fetchAll() async {
+    final uri = Uri.parse('$apiBaseUrl/bookings');
+    final response = await client.get(uri).timeout(const Duration(seconds: 12));
+    if (response.statusCode != 200) throw httpError(response);
+    final data = jsonDecode(response.body) as List<dynamic>;
+    return data
+        .map((item) => Booking.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 
-  Future<List<T>> list<T>(
-    String path,
-    T Function(Json) parse, {
-    Map<String, String>? query,
-  }) async => (await request('GET', path, query: query) as List)
-      .cast<Json>()
-      .map(parse)
-      .toList();
-  Future<List<Resource>> resources() => list('resources', Resource.fromJson);
-  Future<List<Member>> members() => list('members', Member.fromJson);
-  Future<List<Booking>> bookings() => list('bookings', Booking.fromJson);
-  Future<List<Booking>> memberBookings(int memberId) =>
-      list('bookings/member/$memberId', Booking.fromJson);
-  Future<List<Resource>> available(DateTime start, DateTime end) => list(
-    'resources/available',
-    Resource.fromJson,
-    query: {'start': start.toIso8601String(), 'end': end.toIso8601String()},
-  );
-  Future<void> save(Reservation slot, {int? id, bool cancel = false}) async {
-    await request(
-      id == null ? 'POST' : 'PUT',
-      id == null ? 'bookings' : 'bookings/$id',
-      body: {...slot.toJson(), if (cancel) 'status': 'CANCELLED'},
-    );
+  // TRACE: member history -> BookingApi.fetchByMember -> GET /api/bookings/member/{id}
+  // -> BookingController.getMemberBookings -> BookingService.getBookingsByMember
+  // -> MemberRepository.findById + BookingRepository.findByMemberId -> MySQL
+  // <- 200 JSON -> Booking.fromJson -> dialog setState -> history list.
+  Future<List<Booking>> fetchByMember(int memberId) async {
+    final uri = Uri.parse('$apiBaseUrl/bookings/member/$memberId');
+    final response = await client.get(uri).timeout(const Duration(seconds: 12));
+    if (response.statusCode != 200) throw httpError(response);
+    final data = jsonDecode(response.body) as List<dynamic>;
+    return data
+        .map((item) => Booking.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  // TRACE: page -> BookingApi.create -> POST /api/bookings
+  // -> BookingController -> BookingService.createBooking
+  // -> BookingRepository.save -> MySQL <- 201 JSON -> Booking.fromJson -> page reload.
+  // BookingService.checkRules rejects overlaps (409) and capacity/time/status failures (400).
+  Future<Booking> create(Booking draft) async {
+    final uri = Uri.parse('$apiBaseUrl/bookings');
+    final response = await client
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(draft.toJson()),
+        )
+        .timeout(const Duration(seconds: 12));
+    if (response.statusCode != 201) throw httpError(response);
+    return Booking.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  // TRACE: page -> BookingApi.update -> PUT /api/bookings/id
+  // -> BookingController -> BookingService.updateBooking
+  // -> BookingRepository.save -> MySQL <- 200 JSON -> Booking.fromJson -> page reload.
+  // BookingService.checkRules rejects overlaps (409) and capacity/time/status failures (400).
+  Future<Booking> update(int id, Booking draft) async {
+    final uri = Uri.parse('$apiBaseUrl/bookings/$id');
+    final response = await client
+        .put(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(draft.toJson()),
+        )
+        .timeout(const Duration(seconds: 12));
+    if (response.statusCode != 200) throw httpError(response);
+    return Booking.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  // TRACE: Bookings -> BookingApi.cancel -> PUT /api/bookings/{id} with CANCELLED
+  // -> BookingController.updateBooking -> BookingService.updateBooking
+  // -> BookingRepository.save -> MySQL <- 200 JSON -> reload; history is retained.
+  Future<Booking> cancel(Booking booking) async {
+    final uri = Uri.parse('$apiBaseUrl/bookings/${booking.id}');
+    final body = booking.toJson();
+    body['status'] = 'CANCELLED';
+    final response = await client
+        .put(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 12));
+    if (response.statusCode != 200) throw httpError(response);
+    return Booking.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  void close() {
+    if (_ownsClient) client.close();
   }
 }

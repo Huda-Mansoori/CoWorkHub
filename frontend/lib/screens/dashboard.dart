@@ -1,32 +1,44 @@
+// Dashboard: owns sidebar navigation and passes selected booking details between pages.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../services/demo_catalog.dart';
+import '../models/booking.dart';
+import '../models/resource.dart';
 import '../theme/app_theme.dart';
-import '../widgets/app_ui.dart';
-import 'booking_workspace.dart';
+import 'availability.dart';
+import 'new_booking.dart';
+import 'bookings.dart';
+import 'dashboard_home.dart';
 import 'members.dart';
 import 'resources.dart';
 
+class Destination {
+  final String label;
+  final IconData icon;
+  const Destination(this.label, this.icon);
+}
+
 const destinations = [
-  (label: 'Dashboard', icon: Icons.grid_view_outlined),
-  (label: 'Resources', icon: Icons.layers_outlined),
-  (label: 'Members', icon: Icons.people_outline),
-  (label: 'Availability', icon: Icons.event_available_outlined),
-  (label: 'New Booking', icon: Icons.add_box_outlined),
-  (label: 'Bookings', icon: Icons.calendar_today_outlined),
+  Destination('Dashboard', Icons.grid_view_outlined),
+  Destination('Resources', Icons.layers_outlined),
+  Destination('Members', Icons.people_outline),
+  Destination('Availability', Icons.event_available_outlined),
+  Destination('New Booking', Icons.add_box_outlined),
+  Destination('Bookings', Icons.calendar_today_outlined),
 ];
 
 class Dashboard extends StatefulWidget {
-  final String? apiBase;
-  const Dashboard({super.key, this.apiBase});
+  const Dashboard({super.key});
   @override
   State<Dashboard> createState() => _DashboardState();
 }
 
 class _DashboardState extends State<Dashboard> {
   int selectedIndex = 0;
-  final catalog = DemoCatalog();
+  Booking? bookingToEdit;
+  Resource? resourceToBook;
+  DateTime? initialStart, initialEnd;
+  int initialAttendees = 1, bookingRevision = 0;
   final searchFocus = FocusNode();
 
   @override
@@ -39,7 +51,71 @@ class _DashboardState extends State<Dashboard> {
     if (selectedIndex == 1 || selectedIndex == 2) searchFocus.requestFocus();
   }
 
-  void navigate(int index) => setState(() => selectedIndex = index);
+  void navigate(int index) {
+    // setState rebuilds the sidebar selection and the displayed page.
+    setState(() {
+      selectedIndex = index;
+      if (index != 4) bookingToEdit = null;
+    });
+  }
+
+  void openBooking(
+    Resource resource,
+    DateTime start,
+    DateTime end,
+    int attendees,
+  ) {
+    setState(() {
+      bookingToEdit = null;
+      resourceToBook = resource;
+      initialStart = start;
+      initialEnd = end;
+      initialAttendees = attendees;
+      bookingRevision++;
+      selectedIndex = 4;
+    });
+  }
+
+  void editBooking(Booking booking) {
+    setState(() {
+      bookingToEdit = booking;
+      bookingRevision++;
+      selectedIndex = 4;
+    });
+  }
+
+  Widget currentPage() {
+    if (selectedIndex == 0) return DashboardHome(navigate: navigate);
+    if (selectedIndex == 1) return Resources(searchFocus: searchFocus);
+    if (selectedIndex == 2) return Members(searchFocus: searchFocus);
+    // Keep the three booking pages mounted while switching between them so drafts survive.
+    return IndexedStack(
+      index: selectedIndex - 3,
+      children: [
+        Availability(
+          active: selectedIndex == 3,
+          onBook: openBooking,
+          onSaved: () => navigate(5),
+        ),
+        NewBooking(
+          active: selectedIndex == 4,
+          bookingToEdit: bookingToEdit,
+          initialResource: resourceToBook,
+          initialStart: initialStart,
+          initialEnd: initialEnd,
+          initialAttendees: initialAttendees,
+          revision: bookingRevision,
+          onSaved: () => navigate(5),
+          onDiscard: () => navigate(5),
+        ),
+        Bookings(
+          active: selectedIndex == 5,
+          onEdit: editBooking,
+          onNewBooking: () => navigate(4),
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -180,159 +256,12 @@ class _DashboardState extends State<Dashboard> {
                     ),
                   ),
                 ),
-                Expanded(
-                  child: FocusTraversalGroup(
-                    child: switch (selectedIndex) {
-                      0 => DashboardHome(navigate: navigate),
-                      1 => Resources(
-                        catalog,
-                        apiBase: widget.apiBase,
-                        searchFocus: searchFocus,
-                      ),
-                      2 => Members(
-                        catalog,
-                        apiBase: widget.apiBase,
-                        searchFocus: searchFocus,
-                      ),
-                      _ => BookingWorkspace(
-                        page: selectedIndex,
-                        catalog: catalog,
-                        navigate: navigate,
-                        apiBase: widget.apiBase,
-                      ),
-                    },
-                  ),
-                ),
+                Expanded(child: FocusTraversalGroup(child: currentPage())),
               ],
             );
           },
         ),
       ),
     ),
-  );
-}
-
-class DashboardHome extends StatelessWidget {
-  final ValueChanged<int> navigate;
-  const DashboardHome({super.key, required this.navigate});
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, box) {
-      final padding = box.maxWidth < 600 ? 20.0 : 32.0;
-      final available = box.maxWidth - padding * 2;
-      final columns = available >= 900
-          ? 3
-          : available >= 570
-          ? 2
-          : 1;
-      final width = (available - (columns - 1) * 20) / columns;
-      return ListView(
-        padding: EdgeInsets.all(padding),
-        children: [
-          const PageHeading('Dashboard'),
-          const SizedBox(height: 32),
-          Text(
-            'Welcome to CoWorkHub',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 28),
-          Wrap(
-            spacing: 20,
-            runSpacing: 20,
-            children: [
-              for (final item in [
-                (
-                  title: 'Resources',
-                  button: 'View resources',
-                  page: 1,
-                  desk: false,
-                  image: 1,
-                  icon: Icons.meeting_room_outlined,
-                ),
-                (
-                  title: 'Members',
-                  button: 'View members',
-                  page: 2,
-                  desk: true,
-                  image: 2,
-                  icon: Icons.people_outline,
-                ),
-                (
-                  title: 'Bookings',
-                  button: 'View bookings',
-                  page: 5,
-                  desk: false,
-                  image: 2,
-                  icon: Icons.calendar_today_outlined,
-                ),
-              ])
-                SizedBox(
-                  width: width,
-                  child: Panel(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        ResourcePhoto(
-                          isDesk: item.desk,
-                          id: item.image,
-                          height: 180,
-                        ),
-                        const SizedBox(height: 20),
-                        Row(
-                          children: [
-                            Icon(item.icon, color: indigo),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                item.title,
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        FilledButton(
-                          onPressed: () => navigate(item.page),
-                          child: Text(item.button),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 28),
-          Panel(
-            child: Wrap(
-              spacing: 24,
-              runSpacing: 20,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                const Icon(
-                  Icons.event_available_outlined,
-                  color: indigo,
-                  size: 36,
-                ),
-                const Text(
-                  'Find a workspace for your next booking.',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-                ),
-                FilledButton.icon(
-                  onPressed: () => navigate(3),
-                  icon: const Icon(Icons.search),
-                  label: const Text('Check availability'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: () => navigate(4),
-                  icon: const Icon(Icons.add_box_outlined),
-                  label: const Text('New booking'),
-                ),
-              ],
-            ),
-          ),
-        ],
-      );
-    },
   );
 }
