@@ -230,9 +230,9 @@ class _AvailabilityState extends State<Availability> {
     });
   }
 
-  // TRACE: Save -> BookingApi.create -> POST/PUT /api/bookings
+  // TRACE: Save -> BookingApi.create -> POST /api/bookings
   // -> BookingController -> BookingService -> checkRules -> BookingRepository.save -> MySQL
-  // <- 201/200 -> reload choices -> Bookings reloads its list.
+  // <- 201 -> reload choices -> Bookings reloads its list.
   // checkRules rejects overlap with 409 and time/capacity/status failures with 400.
   Future<void> saveBooking() async {
     if (busy) return;

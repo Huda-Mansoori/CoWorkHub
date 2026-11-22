@@ -42,7 +42,7 @@ class BookingApi {
   }
 
   // TRACE: page -> BookingApi.create -> POST /api/bookings
-  // -> BookingController -> BookingService.createBooking
+  // -> BookingController.createBooking -> BookingService.createBooking
   // -> BookingRepository.save -> MySQL <- 201 JSON -> Booking.fromJson -> page reload.
   // BookingService.checkRules rejects overlaps (409) and capacity/time/status failures (400).
   Future<Booking> create(Booking draft) async {
@@ -58,8 +58,8 @@ class BookingApi {
     return Booking.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  // TRACE: page -> BookingApi.update -> PUT /api/bookings/id
-  // -> BookingController -> BookingService.updateBooking
+  // TRACE: page -> BookingApi.update -> PUT /api/bookings/{id}
+  // -> BookingController.updateBooking -> BookingService.updateBooking
   // -> BookingRepository.save -> MySQL <- 200 JSON -> Booking.fromJson -> page reload.
   // BookingService.checkRules rejects overlaps (409) and capacity/time/status failures (400).
   Future<Booking> update(int id, Booking draft) async {

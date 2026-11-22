@@ -69,7 +69,7 @@ class _MembersState extends State<Members> {
     }
   }
 
-  // TRACE: editor -> MemberApi.create/update -> POST/PUT /api/members
+  // TRACE: editor -> MemberApi.create/update -> POST /api/members or PUT /api/members/{id}
   // -> MemberController -> MemberService -> MemberRepository.save -> MySQL
   // <- 201/200 -> close editor -> loadMembers -> refreshed list.
   Future<void> edit([Member? existing]) async {

@@ -46,8 +46,8 @@ class ResourceApi {
         .toList();
   }
 
-  // TRACE: page -> ResourceApi.create -> POST /api/resources/segment
-  // -> ResourceController -> ResourceService.createResource
+  // TRACE: page -> ResourceApi.create -> POST /api/resources/rooms or /api/resources/desks
+  // -> ResourceController.createMeetingRoom/createDesk -> ResourceService.createResource
   // -> ResourceRepository.save -> MySQL <- 201 JSON -> Resource.fromJson -> page reload.
   Future<Resource> create(Resource draft) async {
     String segment = 'rooms';
@@ -64,8 +64,8 @@ class ResourceApi {
     return Resource.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  // TRACE: page -> ResourceApi.update -> PUT /api/resources/segment/id
-  // -> ResourceController -> ResourceService.updateResource
+  // TRACE: page -> ResourceApi.update -> PUT /api/resources/rooms/{id} or /api/resources/desks/{id}
+  // -> ResourceController.updateMeetingRoom/updateDesk -> ResourceService.updateResource
   // -> ResourceRepository.save -> MySQL <- 200 JSON -> Resource.fromJson -> page reload.
   Future<Resource> update(int id, Resource draft) async {
     String segment = 'rooms';

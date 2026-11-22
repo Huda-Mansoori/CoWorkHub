@@ -187,7 +187,7 @@ class _NewBookingState extends State<NewBooking> {
     return timeError == null;
   }
 
-  // TRACE: Save -> BookingApi.create/update -> POST/PUT /api/bookings
+  // TRACE: Save -> BookingApi.create/update -> POST /api/bookings or PUT /api/bookings/{id}
   // -> BookingController -> BookingService -> checkRules -> BookingRepository.save -> MySQL
   // <- 201/200 -> reload choices -> Bookings reloads its list.
   // checkRules rejects overlap with 409 and time/capacity/status failures with 400.

@@ -28,7 +28,7 @@ class MemberApi {
   }
 
   // TRACE: page -> MemberApi.create -> POST /api/members
-  // -> MemberController -> MemberService.createMember
+  // -> MemberController.createMember -> MemberService.createMember
   // -> MemberRepository.save -> MySQL <- 201 JSON -> Member.fromJson -> page reload.
   Future<Member> create(Member draft) async {
     final uri = Uri.parse('$apiBaseUrl/members');
@@ -43,8 +43,8 @@ class MemberApi {
     return Member.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  // TRACE: page -> MemberApi.update -> PUT /api/members/id
-  // -> MemberController -> MemberService.updateMember
+  // TRACE: page -> MemberApi.update -> PUT /api/members/{id}
+  // -> MemberController.updateMember -> MemberService.updateMember
   // -> MemberRepository.save -> MySQL <- 200 JSON -> Member.fromJson -> page reload.
   Future<Member> update(int id, Member draft) async {
     final uri = Uri.parse('$apiBaseUrl/members/$id');

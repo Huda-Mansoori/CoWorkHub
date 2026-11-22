@@ -89,7 +89,8 @@ class _ResourcesState extends State<Resources> {
     }
   }
 
-  // TRACE: editor -> ResourceApi.create/update -> POST/PUT /api/resources
+  // TRACE: editor -> ResourceApi.create/update -> POST /api/resources/rooms or /desks
+  // (PUT adds /{id} after the subtype segment).
   // -> ResourceController -> ResourceService -> ResourceRepository.save -> MySQL
   // <- 201/200 -> close editor -> loadResources -> refreshed list.
   Future<void> edit([Resource? existing]) async {
