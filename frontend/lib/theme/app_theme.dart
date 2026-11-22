@@ -1,3 +1,4 @@
+// Application theme: preserves the agreed indigo desktop colors, typography and component styles.
 import 'package:flutter/material.dart';
 
 const indigo = Color(0xFF493FCA);

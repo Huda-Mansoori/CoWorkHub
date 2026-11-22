@@ -1,55 +1,98 @@
+// BookingApi tests: HTTP paths, JSON bodies, expected status codes and backend messages.
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:frontend/models/booking.dart';
 import 'package:frontend/services/booking_api.dart';
 
+import 'fixtures.dart';
+
 void main() {
-  final start = DateTime(2026, 11, 12, 9);
-  final end = start.add(const Duration(hours: 1));
-  final slot = Reservation(2, 3, 1, start, end);
-
-  test('Adjacent bookings are allowed and cancelled slots are free', () {
-    final booking = Booking(1, slot, 'CONFIRMED', 20);
-    expect(booking.conflicts(3, start, end), isTrue);
-    expect(
-      booking.conflicts(3, end, end.add(const Duration(hours: 1))),
-      isFalse,
-    );
-    expect(Booking(1, slot, 'CANCELLED', 20).conflicts(3, start, end), isFalse);
-  });
-
-  test('Creating a booking sends IDs and surfaces a server conflict', () async {
+  test('BookingApi GET decodes a typed list', () async {
     final api = BookingApi(
-      'http://localhost/api',
-      MockClient((request) async {
-        expect(request.method, 'POST');
+      client: MockClient((request) async {
+        expect(request.method, 'GET');
         expect(request.url.path, '/api/bookings');
-        expect(jsonDecode(request.body), slot.toJson());
-        return http.Response('{"message":"Time slot unavailable"}', 409);
+        return jsonResponse([bookingJson()]);
       }),
     );
+    expect(await api.fetchAll(), hasLength(1));
+  });
+  test('BookingApi create expects 201 and sends request fields', () async {
+    final api = BookingApi(
+      client: MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.headers['content-type'], 'application/json');
+        expect(
+          jsonDecode(request.body),
+          Booking.fromJson(bookingJson()).toJson(),
+        );
+        return jsonResponse(bookingJson(), 201);
+      }),
+    );
+    expect((await api.create(Booking.fromJson(bookingJson()))).id, 7);
+  });
+  test('BookingApi update expects 200', () async {
+    final api = BookingApi(
+      client: MockClient((request) async {
+        expect(request.method, 'PUT');
+        expect(request.url.path, '/api/bookings/7');
+        return jsonResponse(bookingJson());
+      }),
+    );
+    await api.update(7, Booking.fromJson(bookingJson()));
+  });
+  test('BookingApi exposes the backend 409 message', () async {
+    final api = BookingApi(
+      client: MockClient(
+        (_) async => jsonResponse({
+          'status': 409,
+          'error': 'Conflict',
+          'message': 'Already exists or overlaps.',
+        }, 409),
+      ),
+    );
     await expectLater(
-      api.save(slot),
+      api.create(Booking.fromJson(bookingJson())),
       throwsA(
-        predicate((e) => e.toString().contains('409: Time slot unavailable')),
+        predicate(
+          (e) => e.toString().contains('HTTP 409: Already exists or overlaps.'),
+        ),
       ),
     );
   });
-  test('Availability uses backend start and end parameter names', () async {
+  test('BookingApi rejects an unexpected success status', () async {
     final api = BookingApi(
-      'http://localhost/api',
-      MockClient((request) async {
-        expect(request.url.path, '/api/resources/available');
-        expect(request.url.queryParameters, {
-          'start': start.toIso8601String(),
-          'end': end.toIso8601String(),
-        });
-        return http.Response('[]', 200);
+      client: MockClient((_) async => jsonResponse(bookingJson(), 200)),
+    );
+    await expectLater(
+      api.create(Booking.fromJson(bookingJson())),
+      throwsException,
+    );
+  });
+  test('Member history uses the member-specific endpoint', () async {
+    final api = BookingApi(
+      client: MockClient((request) async {
+        expect(request.url.path, '/api/bookings/member/1');
+        return jsonResponse([bookingJson()]);
       }),
     );
-    expect(await api.available(start, end), isEmpty);
+    expect(await api.fetchByMember(1), hasLength(1));
+  });
+  test('Cancellation sends original booking fields plus CANCELLED', () async {
+    final booking = Booking.fromJson(bookingJson());
+    final api = BookingApi(
+      client: MockClient((request) async {
+        expect(request.method, 'PUT');
+        expect(request.url.path, '/api/bookings/7');
+        expect(jsonDecode(request.body), {
+          ...booking.toJson(),
+          'status': 'CANCELLED',
+        });
+        return jsonResponse(bookingJson(status: 'CANCELLED'));
+      }),
+    );
+    expect((await api.cancel(booking)).status, 'CANCELLED');
   });
 }

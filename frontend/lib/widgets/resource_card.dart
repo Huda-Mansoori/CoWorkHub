@@ -1,6 +1,7 @@
+// Resource card: stateless presentation of a resource with callbacks owned by the page.
 import 'package:flutter/material.dart';
 
-import '../models/booking.dart';
+import '../models/resource.dart';
 import 'app_ui.dart';
 import '../theme/app_theme.dart';
 
@@ -8,7 +9,6 @@ class ResourceCard extends StatelessWidget {
   final Resource resource;
   final VoidCallback? onBook, onEdit, onDelete;
   final bool selected, disabled;
-  final Json? details;
   const ResourceCard({
     super.key,
     required this.resource,
@@ -17,7 +17,6 @@ class ResourceCard extends StatelessWidget {
     this.onDelete,
     this.selected = false,
     this.disabled = false,
-    this.details,
   });
   @override
   Widget build(BuildContext context) => Container(
@@ -30,7 +29,7 @@ class ResourceCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ResourcePhoto(isDesk: resource.isDesk, id: resource.id, height: 180),
+          ResourcePhoto(isDesk: resource is Desk, id: resource.id, height: 180),
           const SizedBox(height: 18),
           Wrap(
             spacing: 12,
@@ -52,23 +51,20 @@ class ResourceCard extends StatelessWidget {
           ),
           FactRow(
             Icons.payments_outlined,
-            '${resource.rate.toStringAsFixed(2)} QAR / hour',
+            '${resource.hourlyRate.toStringAsFixed(2)} QAR / hour',
           ),
-          if (details != null) ...[
+          if (onBook == null) ...[
             const Divider(height: 24),
-            if (resource.isDesk)
-              FactRow(
-                Icons.desk_outlined,
-                details!['deskType']?.toString() ?? 'Desk',
-              )
+            if (resource is Desk)
+              FactRow(Icons.desk_outlined, (resource as Desk).deskType)
             else ...[
               FactRow(
                 Icons.slideshow_outlined,
-                'Projector: ${details!['projector'] == true ? 'Yes' : 'No'}',
+                'Projector: ${(resource as MeetingRoom).projector ? 'Yes' : 'No'}',
               ),
               FactRow(
                 Icons.videocam_outlined,
-                'Video conference: ${details!['videoConference'] == true ? 'Yes' : 'No'}',
+                'Video conference: ${(resource as MeetingRoom).videoConference ? 'Yes' : 'No'}',
               ),
             ],
           ],

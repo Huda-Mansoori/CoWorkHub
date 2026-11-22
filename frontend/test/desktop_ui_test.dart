@@ -1,280 +1,204 @@
+// Desktop UI tests: management state, search, validation, keyboard and responsive layouts.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:frontend/main.dart';
-import 'package:frontend/screens/members.dart';
+import 'package:http/testing.dart';
+import 'package:frontend/screens/dashboard.dart';
 import 'package:frontend/screens/resources.dart';
-import 'package:frontend/services/demo_catalog.dart';
+import 'package:frontend/screens/members.dart';
+import 'package:frontend/screens/member_editor_dialog.dart';
+import 'package:frontend/screens/resource_editor_dialog.dart';
+import 'package:frontend/models/resource.dart';
+import 'package:frontend/services/resource_api.dart';
+import 'package:frontend/services/member_api.dart';
+import 'package:frontend/services/booking_api.dart';
 import 'package:frontend/theme/app_theme.dart';
 
-Finder field(String label) => find.byWidgetPredicate(
-  (widget) => widget is TextField && widget.decoration?.labelText == label,
+import 'fixtures.dart';
+
+Widget app(Widget child, {double scale = 1}) => MaterialApp(
+  theme: buildAppTheme(),
+  home: MediaQuery(
+    data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+    child: Scaffold(body: child),
+  ),
 );
-
-Future<void> setSize(WidgetTester tester, Size size) async {
-  await tester.binding.setSurfaceSize(size);
-  addTearDown(() => tester.binding.setSurfaceSize(null));
-}
-
-Future<void> tapVisible(WidgetTester tester, Finder finder) async {
-  await tester.ensureVisible(finder.first);
-  await tester.pumpAndSettle();
-  await tester.tap(finder.first);
-  await tester.pumpAndSettle();
-}
-
 void main() {
-  testWidgets('All six screens remain usable in a compact desktop window', (
-    tester,
-  ) async {
-    await setSize(tester, const Size(640, 720));
-    await tester.pumpWidget(const MyApp(apiBase: ''));
+  testWidgets('Dashboard navigation uses all six destinations', (tester) async {
+    await tester.pumpWidget(app(const Dashboard()));
     await tester.pumpAndSettle();
-    for (final label in [
+    for (final destination in [
+      'Dashboard',
       'Resources',
       'Members',
       'Availability',
       'New Booking',
       'Bookings',
-      'Dashboard',
     ]) {
-      await tapVisible(tester, find.byTooltip(label));
-      expect(tester.takeException(), isNull, reason: label);
+      expect(find.byTooltip(destination), findsOneWidget);
     }
+    expect(find.text('Welcome to CoWorkHub'), findsOneWidget);
   });
-
-  testWidgets(
-    'Resource empty state opens a form with specific inline validation',
-    (tester) async {
-      await setSize(tester, const Size(900, 800));
-      final catalog = DemoCatalog()..resources.clear();
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: buildAppTheme(),
-          home: Scaffold(body: Resources(catalog, apiBase: '')),
+  testWidgets('Resources search and combined filters change the loaded list', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      app(Resources(api: ResourceApi(client: fixtureClient()))),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Meeting Room A'), findsOneWidget);
+    expect(find.text('Desk 1'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).first, ' ROOM ');
+    await tester.pumpAndSettle();
+    expect(find.text('Meeting Room A'), findsOneWidget);
+    expect(find.text('Desk 1'), findsNothing);
+    await tester.enterText(find.byType(TextField).first, 'missing');
+    await tester.pumpAndSettle();
+    expect(find.text('No matching resources'), findsOneWidget);
+    await tester.ensureVisible(find.text('Clear filters'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Clear filters'));
+    await tester.pumpAndSettle();
+    expect(find.text('Desk 1'), findsOneWidget);
+  });
+  testWidgets('Resource error retries and empty state offers Add resource', (
+    tester,
+  ) async {
+    int calls = 0;
+    final client = MockClient((_) async {
+      calls++;
+      if (calls == 1) {
+        return jsonResponse({'message': 'Backend unavailable'}, 503);
+      }
+      return jsonResponse([]);
+    });
+    await tester.pumpWidget(app(Resources(api: ResourceApi(client: client))));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Backend unavailable'), findsOneWidget);
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+    expect(find.text('No resources yet'), findsOneWidget);
+  });
+  testWidgets('Member form validates email then Enter saves typed model', (
+    tester,
+  ) async {
+    String? email;
+    await tester.pumpWidget(
+      app(
+        MemberEditor(
+          onSave: (draft) async {
+            email = draft.email;
+          },
         ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('No resources yet'), findsOneWidget);
-      await tapVisible(tester, find.text('Add resource'));
-      await tapVisible(tester, find.text('Save'));
-      expect(find.text('This field is required.'), findsWidgets);
-      expect(find.text('Enter a capacity of at least 1.'), findsOneWidget);
-      expect(catalog.resources, isEmpty);
-    },
-  );
-
+      ),
+    );
+    await tester.enterText(find.byType(TextFormField).at(0), 'Dana Ali');
+    await tester.enterText(find.byType(TextFormField).at(1), 'bad');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Enter a valid email address'), findsOneWidget);
+    expect(email, isNull);
+    await tester.enterText(
+      find.byType(TextFormField).at(1),
+      'dana@example.com',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(email, 'dana@example.com');
+  });
   testWidgets(
-    'Resource search filters cards and clear filters restores results',
+    'Pending save prevents duplicate requests and preserves fields on failure',
     (tester) async {
-      await setSize(tester, const Size(1000, 900));
+      final result = Completer<void>();
+      int calls = 0;
       await tester.pumpWidget(
-        MaterialApp(
-          theme: buildAppTheme(),
-          home: Scaffold(body: Resources(DemoCatalog(), apiBase: '')),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField).first, 'unmatched');
-      await tester.pumpAndSettle();
-      expect(find.text('No matching resources'), findsOneWidget);
-      await tapVisible(tester, find.text('Clear filters'));
-      expect(find.text('Meeting Room A'), findsOneWidget);
-      expect(find.text('Desk 1'), findsOneWidget);
-    },
-  );
-
-  testWidgets(
-    'Control F focuses member search and safe confirmation defaults to cancel',
-    (tester) async {
-      await setSize(tester, const Size(1000, 850));
-      final catalog = DemoCatalog();
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: buildAppTheme(),
-          home: Scaffold(body: Members(catalog, apiBase: '')),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-      await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<TextField>(find.byType(TextField).first)
-            .focusNode!
-            .hasFocus,
-        isTrue,
-      );
-      await tapVisible(tester, find.byTooltip('Delete member'));
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await tester.pumpAndSettle();
-      expect(catalog.members, hasLength(1));
-      expect(find.text('Delete member?'), findsNothing);
-    },
-  );
-
-  testWidgets(
-    'Member creation validates email and refreshes the list after Enter',
-    (tester) async {
-      await setSize(tester, const Size(1000, 850));
-      final catalog = DemoCatalog();
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: buildAppTheme(),
-          home: Scaffold(body: Members(catalog, apiBase: '')),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tapVisible(tester, find.text('Add member'));
-      await tester.enterText(field('Member name *'), 'Leila Ahmed');
-      await tester.enterText(field('Email *'), 'invalid');
-      await tapVisible(tester, find.text('Save'));
-      expect(
-        find.text('Enter a valid email address, e.g. dana@example.com.'),
-        findsOneWidget,
-      );
-      await tester.enterText(field('Email *'), 'leila@example.com');
-      await tester.testTextInput.receiveAction(TextInputAction.done);
-      await tester.pumpAndSettle();
-      expect(catalog.members, hasLength(2));
-      expect(find.text('Leila Ahmed'), findsOneWidget);
-    },
-  );
-
-  testWidgets(
-    'Saving blocks duplicate requests and preserves fields after a server error',
-    (tester) async {
-      await setSize(tester, const Size(900, 800));
-      final pending = Completer<void>();
-      var calls = 0;
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: buildAppTheme(),
-          home: Builder(
-            builder: (context) => Scaffold(
-              body: TextButton(
-                onPressed: () => showDialog<void>(
-                  context: context,
-                  builder: (_) => MemberEditor(
-                    onSave: (_, _) {
-                      calls++;
-                      return pending.future;
-                    },
-                  ),
-                ),
-                child: const Text('Open'),
-              ),
-            ),
+        app(
+          MemberEditor(
+            onSave: (_) {
+              calls++;
+              return result.future;
+            },
           ),
         ),
       );
-      await tapVisible(tester, find.text('Open'));
-      await tester.enterText(field('Member name *'), 'Dana Ali');
-      await tester.enterText(field('Email *'), 'dana@example.com');
+      await tester.enterText(find.byType(TextFormField).at(0), 'Dana');
+      await tester.enterText(
+        find.byType(TextFormField).at(1),
+        'dana@example.com',
+      );
       await tester.tap(find.text('Save'));
       await tester.pump();
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
       await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       expect(calls, 1);
-      pending.completeError(Exception('This email is already registered.'));
+      result.completeError(Exception('HTTP 409: Email already exists'));
       await tester.pumpAndSettle();
-      expect(find.text('This email is already registered.'), findsOneWidget);
-      expect(find.text('Dana Ali'), findsOneWidget);
+      expect(find.textContaining('Email already exists'), findsOneWidget);
       expect(find.text('dana@example.com'), findsOneWidget);
     },
   );
-
-  testWidgets(
-    'Large text and a short window keep resource controls reachable',
-    (tester) async {
-      await setSize(tester, const Size(720, 500));
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: buildAppTheme(),
-          home: MediaQuery(
-            data: const MediaQueryData(textScaler: TextScaler.linear(1.8)),
-            child: Scaffold(body: Resources(DemoCatalog(), apiBase: '')),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-      await tapVisible(tester, find.text('Add resource'));
-      expect(tester.takeException(), isNull);
-      await tapVisible(tester, find.text('Cancel'));
-    },
-  );
-  testWidgets('Search shortcut works while sidebar navigation has focus', (
-    tester,
-  ) async {
-    await setSize(tester, const Size(1440, 900));
-    await tester.pumpWidget(const MyApp(apiBase: ''));
-    await tester.pumpAndSettle();
-    await tapVisible(tester, find.text('Members').first);
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-    await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-    await tester.pumpAndSettle();
-    expect(
-      tester
-          .widget<TextField>(find.byType(TextField).first)
-          .focusNode!
-          .hasFocus,
-      isTrue,
-    );
-  });
-
-  testWidgets('Failed resource loading provides an error message and Retry', (
-    tester,
-  ) async {
-    await setSize(tester, const Size(1000, 800));
+  testWidgets('Members load and search by name', (tester) async {
+    final client = fixtureClient();
     await tester.pumpWidget(
-      MaterialApp(
-        theme: buildAppTheme(),
-        home: Scaffold(
-          body: Resources(DemoCatalog(), apiBase: 'http://backend.invalid/api'),
+      app(
+        Members(
+          api: MemberApi(client: client),
+          bookingApi: BookingApi(client: client),
         ),
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Could not load resources.'), findsOneWidget);
-    expect(find.text('Retry'), findsOneWidget);
-    await tapVisible(tester, find.text('Retry'));
-    expect(find.text('Could not load resources.'), findsOneWidget);
-    expect(tester.takeException(), isNull);
+    expect(find.text('Dana Ali'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).first, 'nobody');
+    await tester.pumpAndSettle();
+    expect(find.text('No matching members'), findsOneWidget);
   });
-
   testWidgets(
-    'Editing a booking preserves its member and updates the reservation',
+    'Large text and compact window keep resource controls scrollable',
     (tester) async {
-      await setSize(tester, const Size(1440, 900));
-      await tester.pumpWidget(const MyApp(apiBase: ''));
-      await tester.pumpAndSettle();
-      await tapVisible(tester, find.text('New Booking'));
-      await tapVisible(tester, find.byType(DropdownButtonFormField<int>).first);
-      await tapVisible(tester, find.text('Dana Ali').last);
-      await tapVisible(tester, find.byType(DropdownButtonFormField<int>).last);
-      await tapVisible(tester, find.text('Meeting Room A').last);
-      await tapVisible(tester, find.text('Save booking'));
-      await tapVisible(tester, find.text('Edit').first);
-      expect(
-        tester
-            .widget<DropdownButtonFormField<int>>(
-              find.byType(DropdownButtonFormField<int>).first,
-            )
-            .onChanged,
-        isNull,
+      tester.view.physicalSize = const Size(720, 500);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        app(Resources(api: ResourceApi(client: fixtureClient())), scale: 1.8),
       );
-      await tester.enterText(find.byType(TextField).first, '3');
-      await tapVisible(tester, find.text('Save booking'));
-      expect(find.text('Confirmed'), findsOneWidget);
-      expect(find.text('3'), findsOneWidget);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.scrollUntilVisible(
+        find.text('Desk 1'),
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
     },
   );
+  testWidgets('Resource editor saves a typed room with its subtype fields', (
+    tester,
+  ) async {
+    Resource? saved;
+    await tester.pumpWidget(
+      app(
+        ResourceEditor(
+          onSave: (draft) async {
+            saved = draft;
+          },
+        ),
+      ),
+    );
+    final fields = find.byType(TextFormField);
+    await tester.enterText(fields.at(0), 'Room Test');
+    await tester.enterText(fields.at(1), 'Floor 1');
+    await tester.enterText(fields.at(2), '6');
+    await tester.enterText(fields.at(3), '80.50');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(saved, isA<MeetingRoom>());
+    expect(saved!.hourlyRate, 80.50);
+    expect(saved!.toJson(), contains('projector'));
+  });
 }

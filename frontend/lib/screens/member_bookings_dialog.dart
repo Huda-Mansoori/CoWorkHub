@@ -1,3 +1,4 @@
+// Member history dialog: loads one member's persisted bookings with explicit four-state feedback.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -9,29 +10,103 @@ class MemberBookingsDialog extends StatefulWidget {
   final int memberId;
   final String memberName;
   final BookingApi api;
-  final Future<List<Booking>> Function()? loader;
   const MemberBookingsDialog({
     super.key,
     required this.memberId,
     required this.memberName,
     required this.api,
-    this.loader,
   });
   @override
   State<MemberBookingsDialog> createState() => _MemberBookingsDialogState();
 }
 
 class _MemberBookingsDialogState extends State<MemberBookingsDialog> {
-  late Future<List<Booking>> bookings;
-  Future<List<Booking>> load() =>
-      widget.loader?.call() ?? widget.api.memberBookings(widget.memberId);
-  void refresh() => setState(() {
-    bookings = load();
-  });
+  List<Booking> bookings = [];
+  bool isLoading = true;
+  String? errorMessage;
   @override
   void initState() {
     super.initState();
-    bookings = load();
+    loadBookings();
+  }
+
+  // TRACE: member history -> BookingApi.fetchByMember -> GET /api/bookings/member/{id}
+  // -> BookingController.getMemberBookings -> BookingService.getBookingsByMember
+  // -> BookingRepository.findByMemberId -> MySQL <- 200 JSON -> Booking.fromJson -> setState -> table.
+  Future<void> loadBookings() async {
+    // Rebuild the dialog when loading, error or the displayed list changes.
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+    try {
+      final data = await widget.api.fetchByMember(widget.memberId);
+      // The dialog may have closed while the request was running.
+      if (!mounted) return;
+      setState(() {
+        bookings = data;
+        isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        isLoading = false;
+        errorMessage = displayError(e);
+      });
+    }
+  }
+
+  Widget history() {
+    if (isLoading) {
+      return const ListState(
+        loading: true,
+        title: 'Loading booking history...',
+      );
+    }
+    if (errorMessage != null) {
+      return ListState(
+        title: 'Could not load booking history.',
+        detail: errorMessage,
+        icon: Icons.error_outline,
+        action: loadBookings,
+      );
+    }
+    if (bookings.isEmpty) {
+      return const ListState(
+        title: 'No bookings for this member.',
+        icon: Icons.calendar_today_outlined,
+      );
+    }
+    return SingleChildScrollView(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          columns: const [
+            DataColumn(label: Text('Date and time')),
+            DataColumn(label: Text('Resource')),
+            DataColumn(label: Text('Status')),
+            DataColumn(label: Text('Total (QAR)'), numeric: true),
+          ],
+          rows: bookings
+              .map(
+                (booking) => DataRow(
+                  key: ValueKey(booking.id),
+                  cells: [
+                    DataCell(
+                      Text(
+                        '${dateTimeLabel(booking.startDateTime)}\n${dateTimeLabel(booking.endDateTime)}',
+                      ),
+                    ),
+                    DataCell(Text(booking.resource.name)),
+                    DataCell(StatusBadge(booking.status)),
+                    DataCell(Text(booking.totalCost.toStringAsFixed(2))),
+                  ],
+                ),
+              )
+              .toList(),
+        ),
+      ),
+    );
   }
 
   @override
@@ -49,71 +124,12 @@ class _MemberBookingsDialogState extends State<MemberBookingsDialog> {
           constraints: BoxConstraints(
             maxHeight: MediaQuery.sizeOf(context).height * .65,
           ),
-          child: FutureBuilder<List<Booking>>(
-            future: bookings,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const ListState(
-                  loading: true,
-                  title: 'Loading booking history...',
-                );
-              }
-              if (snapshot.hasError) {
-                return ListState(
-                  title: 'Could not load booking history.',
-                  detail: displayError(snapshot.error),
-                  icon: Icons.error_outline,
-                  action: refresh,
-                );
-              }
-              final rows = snapshot.data!;
-              if (rows.isEmpty) {
-                return const ListState(
-                  title: 'No bookings for this member.',
-                  icon: Icons.calendar_today_outlined,
-                );
-              }
-              return SingleChildScrollView(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    columns: const [
-                      DataColumn(label: Text('Date and time')),
-                      DataColumn(label: Text('Resource')),
-                      DataColumn(label: Text('Status')),
-                      DataColumn(label: Text('Total (QAR)'), numeric: true),
-                    ],
-                    rows: [
-                      for (final booking in rows)
-                        DataRow(
-                          key: ValueKey(booking.id),
-                          cells: [
-                            DataCell(
-                              Text(
-                                '${dateTimeLabel(booking.slot.start)}\n${dateTimeLabel(booking.slot.end)}',
-                              ),
-                            ),
-                            DataCell(
-                              Text(
-                                booking.resourceName ??
-                                    'Resource #${booking.slot.resourceId}',
-                              ),
-                            ),
-                            DataCell(StatusBadge(booking.status)),
-                            DataCell(Text(booking.cost.toStringAsFixed(2))),
-                          ],
-                        ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
+          child: history(),
         ),
       ),
       actions: [
         TextButton.icon(
-          onPressed: refresh,
+          onPressed: isLoading ? null : loadBookings,
           icon: const Icon(Icons.refresh, size: 18),
           label: const Text('Refresh'),
         ),

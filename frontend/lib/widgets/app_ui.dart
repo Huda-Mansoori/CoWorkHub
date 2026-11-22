@@ -1,14 +1,11 @@
+// Shared UI: visual panels, feedback, dates, keyboard-friendly dialogs and confirmations.
+// Stateless widgets receive values and callbacks; mutable state belongs to their parent pages.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
-
-const defaultApiBase = String.fromEnvironment(
-  'COWORK_API_BASE',
-  defaultValue: 'http://localhost:8080/api',
-);
 
 String displayError(Object? error) {
   if (error is FormatException) return error.message;
@@ -212,11 +209,12 @@ class ResourcePhoto extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) {
-    final path = isDesk
-        ? 'desk'
-        : id.isOdd
-        ? 'room-a'
-        : 'room-b';
+    String path = 'room-b';
+    if (isDesk) {
+      path = 'desk';
+    } else if (id.isOdd) {
+      path = 'room-a';
+    }
     return ClipRRect(
       borderRadius: BorderRadius.circular(9),
       child: Image.asset(

@@ -1,3 +1,4 @@
+// Application entry: configure MaterialApp and open the Dashboard.
 import 'package:flutter/material.dart';
 
 import 'screens/dashboard.dart';
@@ -8,9 +9,7 @@ void main() {
 }
 
 class MyApp extends StatelessWidget {
-  final String? apiBase;
-
-  const MyApp({super.key, this.apiBase});
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +17,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'CoWorkHub',
       theme: buildAppTheme(),
-      home: Dashboard(apiBase: apiBase),
+      home: const Dashboard(),
     );
   }
 }
