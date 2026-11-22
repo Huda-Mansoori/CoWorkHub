@@ -192,8 +192,9 @@ flutter analyze
 flutter test
 ```
 
-The Flutter widget tests use the in-memory demo catalog so they do not
-require a running backend or make real HTTP requests.
+The Flutter tests use MockClient HTTP responses so they do not require a
+running backend or make real network requests. Application screens always use
+the configured backend services.
 
 ## 6. Main Application Features
 
