@@ -32,7 +32,7 @@ class _BookingsState extends State<Bookings> {
   List<Booking> bookings = [];
   List<Member> members = [];
   bool isLoading = true, cancelling = false;
-  String? errorMessage;
+  String? errorMessage, actionError;
   int? filterMember;
   final tableScroll = ScrollController();
   @override
@@ -67,6 +67,7 @@ class _BookingsState extends State<Bookings> {
     setState(() {
       isLoading = true;
       errorMessage = null;
+      actionError = null;
     });
     try {
       final data = await api.fetchAll();
@@ -103,7 +104,10 @@ class _BookingsState extends State<Bookings> {
       cancelLabel: 'Keep booking',
     );
     if (!yes || !mounted) return;
-    setState(() => cancelling = true);
+    setState(() {
+      cancelling = true;
+      actionError = null;
+    });
     try {
       await api.cancel(booking);
       if (!mounted) return;
@@ -112,7 +116,7 @@ class _BookingsState extends State<Bookings> {
       await loadBookings();
     } catch (e) {
       if (!mounted) return;
-      setState(() => errorMessage = displayError(e));
+      setState(() => actionError = displayError(e));
     } finally {
       if (mounted) setState(() => cancelling = false);
     }
@@ -137,6 +141,10 @@ class _BookingsState extends State<Bookings> {
           const SizedBox(height: 28),
           if (cancelling)
             const LinearProgressIndicator(semanticsLabel: 'Cancelling'),
+          if (actionError != null) ...[
+            ErrorBanner(actionError!),
+            const SizedBox(height: 20),
+          ],
           if (isLoading)
             const ListState(loading: true, title: 'Loading booking data...')
           else if (errorMessage != null)

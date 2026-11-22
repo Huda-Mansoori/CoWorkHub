@@ -71,7 +71,7 @@ start/end to the backend, then filters the returned resources by attendee capaci
 
 ## Verification results
 
-43 automated tests passed, Flutter analysis reported no issues, and the release
+44 automated tests passed, Flutter analysis reported no issues, and the release
 web build passed. Tests cover typed JSON, subtype detection, request bodies,
 expected status codes, empty 204 handling, 409 messages, history states/retry,
 booking rendering/cancellation/update/create, validation, management search,

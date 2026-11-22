@@ -274,4 +274,42 @@ void main() {
       findsOneWidget,
     );
   });
+  testWidgets(
+    'Cancellation failure keeps the booking list and shows the backend message',
+    (tester) async {
+      final client = MockClient((request) async {
+        if (request.url.path == '/api/members') {
+          return jsonResponse([memberJson]);
+        }
+        if (request.method == 'PUT') {
+          return jsonResponse({
+            'message': 'Booking changed; refresh first.',
+          }, 409);
+        }
+        return jsonResponse([bookingJson()]);
+      });
+      await tester.pumpWidget(
+        app(
+          Bookings(
+            api: BookingApi(client: client),
+            memberApi: MemberApi(client: client),
+            onEdit: (_) {},
+            onNewBooking: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel booking'));
+      await tester.pumpAndSettle();
+      expect(find.text('Confirmed'), findsOneWidget);
+      expect(
+        find.textContaining('HTTP 409: Booking changed; refresh first.'),
+        findsOneWidget,
+      );
+    },
+  );
 }
